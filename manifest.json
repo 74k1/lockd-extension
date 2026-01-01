@@ -3,6 +3,15 @@
   "name": "LOCKD",
   "version": "1.0.0",
   "description": "Lock in. Block distractions. No bullshit.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "lockd@74k1.sh",
+      "strict_min_version": "112.0",
+      "data_collection_permissions": {
+        "required": [ "none" ]
+      }
+    }
+  },
   "permissions": [
     "storage",
     "webNavigation",
@@ -13,9 +22,7 @@
     "<all_urls>"
   ],
   "background": {
-    "scripts": ["background.js"],
-    "service_worker": "background.js",
-    "type": "module"
+    "scripts": ["background.js"]
   },
   "action": {
     "default_popup": "popup/popup.html",

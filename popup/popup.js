@@ -1,5 +1,3 @@
-// LOCKD - Popup Script
-
 const browser = globalThis.browser || globalThis.chrome;
 
 const statusEl = document.getElementById('status');
@@ -9,6 +7,31 @@ const btnRevokeAll = document.getElementById('btn-revoke-all');
 const btnSettings = document.getElementById('btn-settings');
 
 let config = null;
+
+function createXIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 14 14');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'square');
+  
+  const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line1.setAttribute('x1', '3');
+  line1.setAttribute('y1', '3');
+  line1.setAttribute('x2', '11');
+  line1.setAttribute('y2', '11');
+  
+  const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line2.setAttribute('x1', '11');
+  line2.setAttribute('y1', '3');
+  line2.setAttribute('x2', '3');
+  line2.setAttribute('y2', '11');
+  
+  svg.appendChild(line1);
+  svg.appendChild(line2);
+  return svg;
+}
 
 async function init() {
   config = await browser.runtime.sendMessage({ action: 'getConfig' });
@@ -32,37 +55,58 @@ function updateStatus() {
 async function loadPasses() {
   const passes = await browser.runtime.sendMessage({ action: 'getAllPasses' });
   
-  if (!passes || Object.keys(passes).length === 0) {
-    passesListEl.innerHTML = '<div class="no-passes">No active passes</div>';
-    return;
+  // Clear existing content
+  while (passesListEl.firstChild) {
+    passesListEl.removeChild(passesListEl.firstChild);
   }
   
-  passesListEl.innerHTML = '';
+  if (!passes || Object.keys(passes).length === 0) {
+    const noPassesEl = document.createElement('div');
+    noPassesEl.className = 'no-passes';
+    noPassesEl.textContent = 'No active passes';
+    passesListEl.appendChild(noPassesEl);
+    return;
+  }
   
   for (const [domain, pass] of Object.entries(passes)) {
     const remaining = Math.max(0, Math.ceil((pass.expiresAt - Date.now()) / 60000));
     
     const item = document.createElement('div');
     item.className = 'pass-item';
-    item.innerHTML = `
-      <div class="pass-domain">${domain}</div>
-      <div class="pass-info">
-        <span class="tag ${pass.type}">${pass.type}</span>
-        <span class="pass-time">${remaining}m</span>
-        <button class="pass-revoke" data-domain="${domain}">✕</button>
-      </div>
-    `;
     
-    passesListEl.appendChild(item);
-  }
-  
-  document.querySelectorAll('.pass-revoke').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const domain = e.target.dataset.domain;
+    const domainEl = document.createElement('div');
+    domainEl.className = 'pass-domain';
+    domainEl.textContent = domain;
+    
+    const infoEl = document.createElement('div');
+    infoEl.className = 'pass-info';
+    
+    const tagEl = document.createElement('span');
+    tagEl.className = `tag ${pass.type}`;
+    tagEl.textContent = pass.type;
+    
+    const timeEl = document.createElement('span');
+    timeEl.className = 'pass-time';
+    timeEl.textContent = `${remaining}m`;
+    
+    const revokeBtn = document.createElement('button');
+    revokeBtn.className = 'pass-revoke';
+    revokeBtn.dataset.domain = domain;
+    revokeBtn.appendChild(createXIcon());
+    revokeBtn.addEventListener('click', async () => {
       await browser.runtime.sendMessage({ action: 'revokePass', domain });
       loadPasses();
     });
-  });
+    
+    infoEl.appendChild(tagEl);
+    infoEl.appendChild(timeEl);
+    infoEl.appendChild(revokeBtn);
+    
+    item.appendChild(domainEl);
+    item.appendChild(infoEl);
+    
+    passesListEl.appendChild(item);
+  }
 }
 
 toggleEl.addEventListener('click', async () => {

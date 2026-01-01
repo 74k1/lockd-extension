@@ -1,5 +1,3 @@
-// LOCKD - Options Script
-
 const browser = globalThis.browser || globalThis.chrome;
 
 let config = null;
@@ -24,9 +22,45 @@ const btnSave = document.getElementById('btn-save');
 const btnCancel = document.getElementById('btn-cancel');
 const btnReset = document.getElementById('btn-reset');
 
-// SVG icons
-const checkIcon = `<svg viewBox="0 0 12 12" fill="none" stroke="#07060B" stroke-width="2" stroke-linecap="square"><polyline points="2,6 5,9 10,3"></polyline></svg>`;
-const xIcon = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><line x1="3" y1="3" x2="11" y2="11"></line><line x1="11" y1="3" x2="3" y2="11"></line></svg>`;
+function createCheckIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 12 12');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', '#07060B');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'square');
+  
+  const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+  polyline.setAttribute('points', '2,6 5,9 10,3');
+  
+  svg.appendChild(polyline);
+  return svg;
+}
+
+function createXIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 14 14');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'square');
+  
+  const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line1.setAttribute('x1', '3');
+  line1.setAttribute('y1', '3');
+  line1.setAttribute('x2', '11');
+  line1.setAttribute('y2', '11');
+  
+  const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line2.setAttribute('x1', '11');
+  line2.setAttribute('y1', '3');
+  line2.setAttribute('x2', '3');
+  line2.setAttribute('y2', '11');
+  
+  svg.appendChild(line1);
+  svg.appendChild(line2);
+  return svg;
+}
 
 async function init() {
   config = await browser.runtime.sendMessage({ action: 'getConfig' });
@@ -37,65 +71,99 @@ async function init() {
 }
 
 function renderSites() {
-  sitesListEl.innerHTML = '';
+  // Clear existing content safely
+  while (sitesListEl.firstChild) {
+    sitesListEl.removeChild(sitesListEl.firstChild);
+  }
   
   config.sites.forEach((site, index) => {
     const item = document.createElement('div');
     item.className = 'site-item';
-    item.innerHTML = `
-      <div class="site-info">
-        <div class="site-domain">${site.domain}</div>
-        ${site.name && site.name !== site.domain ? `<div class="site-name">${site.name}</div>` : ''}
-      </div>
-      <div class="site-options">
-        <div class="checkbox-group">
-          <div class="checkbox ${site.work ? 'checked' : ''}" data-index="${index}" data-field="work">${checkIcon}</div>
-          <label>Work</label>
-        </div>
-        <div class="checkbox-group">
-          <div class="checkbox ${site.private ? 'checked' : ''}" data-index="${index}" data-field="private">${checkIcon}</div>
-          <label>Private</label>
-        </div>
-        <div class="checkbox-group">
-          <div class="checkbox ${site.blocked ? 'checked blocked' : ''}" data-index="${index}" data-field="blocked">${checkIcon}</div>
-          <label>Block</label>
-        </div>
-        <button class="site-remove" data-index="${index}">${xIcon}</button>
-      </div>
-    `;
     
-    sitesListEl.appendChild(item);
-  });
-  
-  document.querySelectorAll('.checkbox').forEach(cb => {
-    cb.addEventListener('click', () => {
-      const index = parseInt(cb.dataset.index);
-      const field = cb.dataset.field;
-      
-      config.sites[index][field] = !config.sites[index][field];
-      
-      if (field === 'blocked' && config.sites[index].blocked) {
-        config.sites[index].work = false;
-        config.sites[index].private = false;
-      }
-      
-      if ((field === 'work' || field === 'private') && config.sites[index][field]) {
-        config.sites[index].blocked = false;
-      }
-      
-      renderSites();
-      markChanged();
-    });
-  });
-  
-  document.querySelectorAll('.site-remove').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const index = parseInt(btn.dataset.index);
+    // Site info
+    const siteInfo = document.createElement('div');
+    siteInfo.className = 'site-info';
+    
+    const domainEl = document.createElement('div');
+    domainEl.className = 'site-domain';
+    domainEl.textContent = site.domain;
+    siteInfo.appendChild(domainEl);
+    
+    if (site.name && site.name !== site.domain) {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'site-name';
+      nameEl.textContent = site.name;
+      siteInfo.appendChild(nameEl);
+    }
+    
+    // Site options
+    const siteOptions = document.createElement('div');
+    siteOptions.className = 'site-options';
+    
+    // Work checkbox
+    const workGroup = createCheckboxGroup('Work', site.work, index, 'work');
+    siteOptions.appendChild(workGroup);
+    
+    // Private checkbox
+    const privateGroup = createCheckboxGroup('Private', site.private, index, 'private');
+    siteOptions.appendChild(privateGroup);
+    
+    // Block checkbox
+    const blockGroup = createCheckboxGroup('Block', site.blocked, index, 'blocked', true);
+    siteOptions.appendChild(blockGroup);
+    
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'site-remove';
+    removeBtn.appendChild(createXIcon());
+    removeBtn.addEventListener('click', () => {
       config.sites.splice(index, 1);
       renderSites();
       markChanged();
     });
+    siteOptions.appendChild(removeBtn);
+    
+    item.appendChild(siteInfo);
+    item.appendChild(siteOptions);
+    sitesListEl.appendChild(item);
   });
+}
+
+function createCheckboxGroup(label, checked, index, field, isBlocked = false) {
+  const group = document.createElement('div');
+  group.className = 'checkbox-group';
+  
+  const checkbox = document.createElement('div');
+  checkbox.className = 'checkbox';
+  if (checked) {
+    checkbox.classList.add('checked');
+    if (isBlocked) checkbox.classList.add('blocked');
+  }
+  checkbox.appendChild(createCheckIcon());
+  
+  checkbox.addEventListener('click', () => {
+    config.sites[index][field] = !config.sites[index][field];
+    
+    if (field === 'blocked' && config.sites[index].blocked) {
+      config.sites[index].work = false;
+      config.sites[index].private = false;
+    }
+    
+    if ((field === 'work' || field === 'private') && config.sites[index][field]) {
+      config.sites[index].blocked = false;
+    }
+    
+    renderSites();
+    markChanged();
+  });
+  
+  const labelEl = document.createElement('label');
+  labelEl.textContent = label;
+  
+  group.appendChild(checkbox);
+  group.appendChild(labelEl);
+  
+  return group;
 }
 
 function renderSettings() {
@@ -142,7 +210,6 @@ function updateConfigFromInputs() {
   config.privateDurationMax = parseInt(privateDurationMax.value) || 30;
 }
 
-// Setting inputs
 [workDuration, privateDelay, privateDurationMin, privateDurationDefault, privateDurationMax].forEach(input => {
   input.addEventListener('change', () => {
     updateConfigFromInputs();
