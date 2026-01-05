@@ -55,7 +55,6 @@
       letter-spacing: 1px;
     }
 
-    /* Custom toggle */
     .toggle {
       position: relative;
       width: 48px;
@@ -131,11 +130,21 @@
       color: var(--base08);
       cursor: pointer;
       padding: 4px;
-      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
     }
 
     .pass-revoke:hover {
       color: var(--base07);
+      background-color: var(--base08);
+    }
+
+    .pass-revoke svg {
+      width: 14px;
+      height: 14px;
     }
 
     .no-passes {
