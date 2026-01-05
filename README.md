@@ -1,5 +1,7 @@
 # LOCKD
 
+![lockd-icon](/icons/icon128.png)
+
 A no-bullshit social media blocker for Chrome and Firefox. (vibecoded 🥀)
 
 ## What it does
@@ -28,35 +30,30 @@ Put me on a cross for vibecoding.. my bigger projects I'll do by my own hand/min
 
 ## Screenshots
 
-![locked](/.github/assets/lockd_locked.png)
-![popup](/.github/assets/lockd_popup.png)
-![blocked](/.github/assets/lockd_blocked.png)
-![settings](/.github/assets/lockd_settings.png)
+| ![locked](/.github/assets/lockd_locked.png) | ![blocked](/.github/assets/lockd_blocked.png) |
+| --- | --- |
+| ![settings](/.github/assets/lockd_settings.png) | ![popup](/.github/assets/lockd_popup.png) |
 
 ## Installation
+
+### Firefox
+
+Get it from here 🥳
+
+<a href="https://addons.mozilla.org/addon/lockd-block-distractions-focus?utm_source=github-readme"><img src="https://blog.mozilla.org/addons/files/2020/04/get-the-addon-fx-apr-2020.svg" alt="drawing" width="200"/></a>
 
 ### Chrome
 
 > [!NOTE]
 > Chrome web store is paywalling non-profit open-source developers with a 5$ fee to open up a developer account.
-> I'm not doing that.. you can just follow these steps below.
+> I'm not doing that.. or likely will.. depends on how many people use it on firefox.
+> For now, you can just follow these steps below.
 
 1. Download or clone this repository
 2. Open `chrome://extensions/`
 3. Enable "Developer mode" (toggle in top right)
 4. Click "Load unpacked"
 5. Select the `lockd-extension` folder
-
-### Firefox
-
-> [!NOTE]
-> I'm currently in the process of getting this Add-on added in the Firefox Extension store! I'll update this as soon as I got it. :)
-> Firefox temporary add-ons are removed when the browser closes. For permanent installation, the extension needs to be signed by Mozilla.
-
-1. Download or clone this repository
-2. Open `about:debugging#/runtime/this-firefox`
-3. Click "Load Temporary Add-on"
-4. Select the `manifest.json` file inside `lockd-extension`
 
 ## Configuration
 
