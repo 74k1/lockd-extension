@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOCKD - Settings</title>
+  <link rel="stylesheet" href="../styles/common.css">
+  <style>
+    body {
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 40px;
+    }
+
+    .logo {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--base07);
+      letter-spacing: 6px;
+    }
+
+    .subtitle {
+      color: var(--base04);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    .section {
+      background-color: var(--base01);
+      border: 1px solid var(--base02);
+      margin-bottom: 24px;
+    }
+
+    .section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--base02);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--base06);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .section-content {
+      padding: 20px;
+    }
+
+    /* Sites list */
+    .site-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--base02);
+      gap: 16px;
+    }
+
+    .site-item:last-child {
+      border-bottom: none;
+    }
+
+    .site-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .site-domain {
+      font-size: 14px;
+      color: var(--base06);
+    }
+
+    .site-name {
+      color: var(--base04);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .site-options {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .checkbox-group label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--base04);
+      cursor: pointer;
+    }
+
+    .checkbox {
+      width: 18px;
+      height: 18px;
+      background-color: var(--base02);
+      border: 1px solid var(--base03);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .checkbox.checked {
+      background-color: var(--base0D);
+      border-color: var(--base0D);
+    }
+
+    .checkbox.checked svg {
+      display: block;
+    }
+
+    .checkbox svg {
+      display: none;
+      width: 12px;
+      height: 12px;
+    }
+
+    .checkbox.blocked {
+      background-color: var(--base08);
+      border-color: var(--base08);
+    }
+
+    .site-remove {
+      background: none;
+      border: none;
+      color: var(--base04);
+      cursor: pointer;
+      padding: 4px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .site-remove:hover {
+      color: var(--base08);
+    }
+
+    .site-remove svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Add site form */
+    .add-site-form {
+      display: flex;
+      gap: 12px;
+      padding-top: 16px;
+      border-top: 1px solid var(--base02);
+      margin-top: 16px;
+    }
+
+    .add-site-form input {
+      flex: 1;
+    }
+
+    /* Settings rows */
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--base02);
+      gap: 24px;
+    }
+
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+
+    .setting-info {
+      flex: 1;
+    }
+
+    .setting-label {
+      font-size: 14px;
+      color: var(--base06);
+    }
+
+    .setting-desc {
+      font-size: 11px;
+      color: var(--base04);
+      margin-top: 4px;
+    }
+
+    .setting-input {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .setting-input span {
+      color: var(--base04);
+      font-size: 12px;
+    }
+
+    /* Number inputs - hide spinners */
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .setting-input input[type="number"] {
+      width: 70px;
+      text-align: center;
+    }
+
+    /* Range group for min/default/max */
+    .range-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .range-field {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .range-field label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--base04);
+    }
+
+    .range-field input[type="number"] {
+      width: 70px;
+      text-align: center;
+    }
+
+    .range-separator {
+      color: var(--base03);
+      font-size: 16px;
+      margin-top: 18px;
+    }
+
+    .range-unit {
+      color: var(--base04);
+      font-size: 12px;
+      margin-top: 18px;
+      margin-left: 4px;
+    }
+
+    /* Save bar */
+    .save-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: var(--base01);
+      border-top: 1px solid var(--base02);
+      padding: 16px 40px;
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      transform: translateY(100%);
+      transition: transform 0.2s ease;
+    }
+
+    .save-bar.visible {
+      transform: translateY(0);
+    }
+
+    .save-bar button {
+      min-width: 160px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background-color: var(--base0B);
+      color: var(--base00);
+      padding: 12px 24px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0;
+      transition: all 0.2s ease;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toast.error {
+      background-color: var(--base08);
+    }
+
+    .footer-space {
+      height: 100px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">LOCKD</div>
+      <div class="subtitle">Settings</div>
+    </div>
+
+    <!-- Sites Section -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Blocked Sites</span>
+      </div>
+      <div class="section-content">
+        <div id="sites-list"></div>
+        <div class="add-site-form">
+          <input type="text" id="new-site-domain" placeholder="example.com">
+          <input type="text" id="new-site-name" placeholder="Name (optional)">
+          <button class="primary" id="btn-add-site">ADD</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timing Section -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Timing</span>
+      </div>
+      <div class="section-content">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Work Duration</div>
+            <div class="setting-desc">How long work passes last</div>
+          </div>
+          <div class="setting-input">
+            <input type="number" id="work-duration" min="5" max="480" value="60">
+            <span>min</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Private Delay</div>
+            <div class="setting-desc">Waiting time before private access</div>
+          </div>
+          <div class="setting-input">
+            <input type="number" id="private-delay" min="5" max="120" value="15">
+            <span>sec</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Private Duration Range</div>
+            <div class="setting-desc">Min, default, and max for the slider</div>
+          </div>
+          <div class="range-group">
+            <div class="range-field">
+              <label>Min</label>
+              <input type="number" id="private-duration-min" min="1" max="120" value="5">
+            </div>
+            <span class="range-separator">/</span>
+            <div class="range-field">
+              <label>Default</label>
+              <input type="number" id="private-duration-default" min="1" max="120" value="15">
+            </div>
+            <span class="range-separator">/</span>
+            <div class="range-field">
+              <label>Max</label>
+              <input type="number" id="private-duration-max" min="1" max="120" value="30">
+            </div>
+            <span class="range-unit">min</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Danger Zone</span>
+      </div>
+      <div class="section-content">
+        <button class="danger" id="btn-reset">Reset to Defaults</button>
+      </div>
+    </div>
+
+    <div class="footer-space"></div>
+  </div>
+
+  <div class="save-bar" id="save-bar">
+    <button class="secondary" id="btn-cancel">Cancel</button>
+    <button class="success" id="btn-save">Save Changes</button>
+  </div>
+
+  <div class="toast" id="toast">Settings saved</div>
+
+  <script src="options.js"></script>
+</body>
+</html>

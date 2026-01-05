@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOCKD</title>
+  <link rel="stylesheet" href="../styles/common.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--base07);
+      letter-spacing: 8px;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--base04);
+      font-size: 12px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 60px;
+    }
+
+    .domain {
+      font-size: 24px;
+      color: var(--base0D);
+      margin-bottom: 40px;
+      padding: 16px;
+      background-color: var(--base01);
+      border: 1px solid var(--base02);
+    }
+
+    .question {
+      font-size: 18px;
+      color: var(--base06);
+      margin-bottom: 40px;
+    }
+
+    .choices {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+
+    .choices button {
+      min-width: 160px;
+      padding: 16px 32px;
+    }
+
+    /* Screen base */
+    .screen {
+      display: none;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    /* Waiting screen */
+    .timer {
+      font-size: 72px;
+      font-weight: 700;
+      color: var(--base08);
+      margin: 40px 0;
+    }
+
+    .waiting-message {
+      color: var(--base04);
+      font-size: 14px;
+      margin-bottom: 40px;
+    }
+
+    /* Duration selector */
+    .slider-container {
+      margin: 40px 0;
+    }
+
+    .slider-value {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--base0E);
+      margin-bottom: 20px;
+    }
+
+    .slider-value span {
+      font-size: 18px;
+      color: var(--base04);
+    }
+
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      color: var(--base04);
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    /* Blocked screen */
+    .blocked-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+    }
+
+    .blocked-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .blocked-message {
+      font-size: 18px;
+      color: var(--base08);
+      margin-bottom: 20px;
+    }
+
+    /* Notice text */
+    .notice {
+      color: var(--base04);
+      font-size: 12px;
+      margin-top: 20px;
+    }
+
+    /* Motivational lines */
+    .motivational-lines {
+      margin-top: 60px;
+      padding-top: 40px;
+      border-top: 1px solid var(--base02);
+    }
+
+    .motivational-lines p {
+      color: var(--base03);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* Hidden */
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">LOCKD</div>
+    <div class="subtitle">No bullshit</div>
+
+    <div class="domain" id="domain">loading...</div>
+
+    <!-- Choose Screen -->
+    <div class="screen" id="choose-screen">
+      <div class="question">Why are you here?</div>
+      <div class="choices">
+        <button class="primary" id="btn-work">WORK</button>
+        <button class="secondary" id="btn-private">PRIVATE</button>
+      </div>
+      <div class="notice hidden" id="work-only-notice">
+        This site is configured for work only.
+      </div>
+      <div class="notice hidden" id="private-only-notice">
+        This site is configured for private only.
+      </div>
+    </div>
+
+    <!-- Waiting Screen (Private) -->
+    <div class="screen" id="waiting-screen">
+      <div class="waiting-message">Really? Take a moment to reconsider.</div>
+      <div class="timer" id="waiting-timer">15</div>
+      <p class="motivational">Patience is a virtue</p>
+    </div>
+
+    <!-- Duration Screen -->
+    <div class="screen" id="duration-screen">
+      <div class="question">How long do you need?</div>
+      <div class="slider-container">
+        <div class="slider-value"><span id="duration-value">15</span> <span>min</span></div>
+        <input type="range" id="duration-slider" min="5" max="30" value="15" step="1">
+        <div class="slider-labels">
+          <span id="slider-min-label">5 min</span>
+          <span id="slider-max-label">30 min</span>
+        </div>
+      </div>
+      <button class="success" id="btn-confirm">GRANT ACCESS</button>
+    </div>
+
+    <!-- Blocked Screen -->
+    <div class="screen" id="blocked-screen">
+      <div class="blocked-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#FF4B72" stroke-width="2" stroke-linecap="square">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+        </svg>
+      </div>
+      <div class="blocked-message">This site is completely blocked.</div>
+      <p class="motivational">You made this choice. Respect it.</p>
+      <div style="margin-top: 40px;">
+        <button class="secondary" id="btn-back">GO BACK</button>
+      </div>
+    </div>
+
+    <div class="motivational-lines">
+      <p id="motivational-text">Lock in.</p>
+    </div>
+  </div>
+
+  <script src="blocked.js"></script>
+</body>
+</html>
