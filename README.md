@@ -49,11 +49,11 @@ Get it from here 🥳
 > I'm not doing that.. or likely will.. depends on how many people use it on firefox.
 > For now, you can just follow these steps below.
 
-1. Download or clone this repository
+1. Download & extract or clone this repository
 2. Open `chrome://extensions/`
 3. Enable "Developer mode" (toggle in top right)
 4. Click "Load unpacked"
-5. Select the `lockd-extension` folder
+5. Select the `lockd-extension/dist/chrome` folder
 
 ## Configuration
 
