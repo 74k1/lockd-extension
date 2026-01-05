@@ -1,0 +1,226 @@
+:root {
+  --base00: #07060B;
+  --base01: #1C1B28;
+  --base02: #323246;
+  --base03: #4C4B69;
+  --base04: #72708E;
+  --base05: #BFBDCA;
+  --base06: #EBE9F1;
+  --base07: #FFFFFF;
+  --base08: #FF4B72;
+  --base09: #FF9A5B;
+  --base0A: #FFE15A;
+  --base0B: #54FF80;
+  --base0C: #5BEBEB;
+  --base0D: #7089FF;
+  --base0E: #AB72FF;
+  --base0F: #E366D9;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+body {
+  font-family: monospace;
+  background-color: var(--base00);
+  color: var(--base05);
+  line-height: 1.6;
+}
+
+button {
+  font-family: monospace;
+  border: none;
+  cursor: pointer;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button.primary {
+  background-color: var(--base0D);
+  color: var(--base00);
+}
+
+button.primary:hover {
+  background-color: var(--base07);
+}
+
+button.secondary {
+  background-color: var(--base02);
+  color: var(--base05);
+  border: 1px solid var(--base03);
+}
+
+button.secondary:hover {
+  background-color: var(--base03);
+  color: var(--base07);
+}
+
+button.danger {
+  background-color: var(--base08);
+  color: var(--base00);
+}
+
+button.danger:hover {
+  background-color: var(--base07);
+}
+
+button.success {
+  background-color: var(--base0B);
+  color: var(--base00);
+}
+
+button.success:hover {
+  background-color: var(--base07);
+}
+
+button:disabled {
+  background-color: var(--base02);
+  color: var(--base04);
+  cursor: not-allowed;
+  transform: none;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  font-family: monospace;
+  background-color: var(--base01);
+  border: 1px solid var(--base03);
+  color: var(--base05);
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+  outline: none;
+  border-color: var(--base0D);
+}
+
+input::placeholder {
+  color: var(--base04);
+}
+
+/* Range input - no border, clean look */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: var(--base02);
+  border: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--base0E);
+  border: none;
+  border-radius: 0;
+  margin-top: -8px;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 4px;
+  background: var(--base02);
+  border: none;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--base0E);
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--base03), transparent);
+  margin: 20px 0;
+}
+
+.motivational {
+  color: var(--base04);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.tag.work {
+  background-color: var(--base0D);
+  color: var(--base00);
+}
+
+.tag.private {
+  background-color: var(--base0E);
+  color: var(--base00);
+}
+
+.tag.blocked {
+  background-color: var(--base08);
+  color: var(--base00);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--base01);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--base03);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--base04);
+}
