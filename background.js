@@ -1,19 +1,17 @@
-// LOCKD - Background Script
-// Compatible with both Chrome (MV3 service worker) and Firefox (MV3 scripts)
-
 const browser = globalThis.browser || globalThis.chrome;
 
 const DEFAULT_SITES = [
-  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false },
+  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false },
+  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false },
   { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false },
   { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false },
-  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false },
   { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false },
-  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false },
-  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false },
-  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false },
-  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false },
   { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false },
+  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false },
+  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false },
+  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false },
+  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false },
+  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false },
 ];
 
 const DEFAULT_CONFIG = {
@@ -27,9 +25,12 @@ const DEFAULT_CONFIG = {
 };
 
 let activePasses = {};
+let isInitialized = false;
 
-// Initialize extension
-async function initialize() {
+// Ensure we have loaded state from storage
+async function ensureInitialized() {
+  if (isInitialized) return;
+  
   const stored = await browser.storage.local.get(['config', 'passes']);
   
   if (!stored.config) {
@@ -51,7 +52,6 @@ async function initialize() {
       config.privateDurationDefault = config.privateDuration || 15;
       needsUpdate = true;
     }
-    // Remove old field
     if (config.privateDuration !== undefined) {
       delete config.privateDuration;
       needsUpdate = true;
@@ -64,26 +64,24 @@ async function initialize() {
   
   if (stored.passes) {
     activePasses = stored.passes;
-    cleanExpiredPasses();
   }
   
+  cleanExpiredPasses();
+  isInitialized = true;
   console.log('[LOCKD] Initialized');
 }
 
-// Run on install
-browser.runtime.onInstalled.addListener(initialize);
-
-// Run on startup (for Firefox persistent background)
-browser.runtime.onStartup.addListener(async () => {
-  const stored = await browser.storage.local.get(['passes']);
-  if (stored.passes) {
-    activePasses = stored.passes;
-    cleanExpiredPasses();
-  }
+// Initialize on install
+browser.runtime.onInstalled.addListener(async () => {
+  isInitialized = false;
+  await ensureInitialized();
 });
 
-// Also initialize immediately for service worker wake-ups
-initialize();
+// Initialize on startup
+browser.runtime.onStartup.addListener(async () => {
+  isInitialized = false;
+  await ensureInitialized();
+});
 
 // Clean expired passes
 function cleanExpiredPasses() {
@@ -103,29 +101,54 @@ function cleanExpiredPasses() {
 }
 
 // Check if domain has active pass
-function hasActivePass(domain) {
+async function hasActivePass(hostname) {
+  await ensureInitialized();
   cleanExpiredPasses();
   
-  const pass = activePasses[domain];
-  if (!pass) return false;
+  // Check exact hostname first
+  if (activePasses[hostname] && activePasses[hostname].expiresAt > Date.now()) {
+    return true;
+  }
   
-  return pass.expiresAt > Date.now();
+  // Check base domain
+  const baseDomain = getBaseDomain(hostname);
+  if (baseDomain !== hostname && activePasses[baseDomain] && activePasses[baseDomain].expiresAt > Date.now()) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Get the base domain from a hostname
+function getBaseDomain(hostname) {
+  const parts = hostname.split('.');
+  if (parts.length > 2) {
+    return parts.slice(-2).join('.');
+  }
+  return hostname;
 }
 
 // Get site config for domain
-async function getSiteConfig(domain) {
+async function getSiteConfig(hostname) {
+  await ensureInitialized();
   const stored = await browser.storage.local.get(['config']);
   const config = stored.config || DEFAULT_CONFIG;
   
-  const site = config.sites.find(s => {
-    return domain === s.domain || domain.endsWith('.' + s.domain);
-  });
+  // Try exact match first
+  let site = config.sites.find(s => hostname === s.domain);
+  
+  // Try subdomain match
+  if (!site) {
+    site = config.sites.find(s => hostname.endsWith('.' + s.domain));
+  }
   
   return site;
 }
 
 // Grant pass for domain
 async function grantPass(domain, type, durationMinutes) {
+  await ensureInitialized();
+  
   const expiresAt = Date.now() + (durationMinutes * 60 * 1000);
   
   activePasses[domain] = {
@@ -136,7 +159,6 @@ async function grantPass(domain, type, durationMinutes) {
   
   await browser.storage.local.set({ passes: activePasses });
   
-  // Set alarm to check tabs when pass expires
   browser.alarms.create(`pass-${domain}`, {
     when: expiresAt
   });
@@ -145,16 +167,20 @@ async function grantPass(domain, type, durationMinutes) {
 }
 
 // Redirect to blocked page
-function redirectToBlocked(tabId, domain, mode) {
+function redirectToBlocked(tabId, originalUrl, siteConfig, mode) {
   const blockedUrl = browser.runtime.getURL(
-    `blocked/blocked.html?domain=${encodeURIComponent(domain)}&mode=${mode}`
+    `blocked/blocked.html?` +
+    `url=${encodeURIComponent(originalUrl)}` +
+    `&domain=${encodeURIComponent(siteConfig.domain)}` +
+    `&mode=${mode}`
   );
   
   browser.tabs.update(tabId, { url: blockedUrl });
 }
 
-// Check all tabs for expired passes and redirect if needed
+// Check all tabs for expired passes
 async function checkTabsForExpiredPasses(expiredDomain) {
+  await ensureInitialized();
   const stored = await browser.storage.local.get(['config']);
   const config = stored.config || DEFAULT_CONFIG;
   
@@ -168,16 +194,15 @@ async function checkTabsForExpiredPasses(expiredDomain) {
       
       try {
         const url = new URL(tab.url);
-        const domain = url.hostname.replace(/^www\./, '');
+        const hostname = url.hostname.replace(/^www\./, '');
         
-        // Check if this tab is on the expired domain
-        const site = await getSiteConfig(domain);
+        const site = await getSiteConfig(hostname);
         if (!site) continue;
         
-        // If domain matches and no active pass, redirect
-        if (site.domain === expiredDomain && !hasActivePass(site.domain)) {
-          console.log(`[LOCKD] Pass expired, redirecting tab ${tab.id} from ${domain}`);
-          redirectToBlocked(tab.id, site.domain, 'choose');
+        const hasPass = await hasActivePass(hostname);
+        if (site.domain === expiredDomain && !hasPass) {
+          console.log(`[LOCKD] Pass expired, redirecting tab ${tab.id} from ${hostname}`);
+          redirectToBlocked(tab.id, tab.url, site, 'choose');
         }
       } catch (e) {
         // Invalid URL, skip
@@ -193,6 +218,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
   browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
     if (details.frameId !== 0) return;
     
+    await ensureInitialized();
     const stored = await browser.storage.local.get(['config']);
     const config = stored.config || DEFAULT_CONFIG;
     
@@ -200,21 +226,22 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
     
     try {
       const url = new URL(details.url);
-      const domain = url.hostname.replace(/^www\./, '');
+      const hostname = url.hostname.replace(/^www\./, '');
       
-      const site = await getSiteConfig(domain);
+      const site = await getSiteConfig(hostname);
       if (!site) return;
       
       if (site.blocked) {
-        redirectToBlocked(details.tabId, domain, 'blocked');
+        redirectToBlocked(details.tabId, details.url, site, 'blocked');
         return;
       }
       
-      if (hasActivePass(site.domain)) {
+      const hasPass = await hasActivePass(hostname);
+      if (hasPass) {
         return;
       }
       
-      redirectToBlocked(details.tabId, site.domain, 'choose');
+      redirectToBlocked(details.tabId, details.url, site, 'choose');
       
     } catch (e) {
       console.error('[LOCKD] Error:', e);
@@ -223,12 +250,12 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
     url: [{ schemes: ['http', 'https'] }]
   });
 } else {
-  // Fallback: use tabs.onUpdated for browsers without webNavigation
   console.log('[LOCKD] webNavigation not available, using tabs.onUpdated fallback');
   
   browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.status !== 'loading' || !changeInfo.url) return;
     
+    await ensureInitialized();
     const stored = await browser.storage.local.get(['config']);
     const config = stored.config || DEFAULT_CONFIG;
     
@@ -236,24 +263,24 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
     
     try {
       const url = new URL(changeInfo.url);
-      const domain = url.hostname.replace(/^www\./, '');
+      const hostname = url.hostname.replace(/^www\./, '');
       
-      const site = await getSiteConfig(domain);
+      const site = await getSiteConfig(hostname);
       if (!site) return;
       
-      // Don't redirect if already on blocked page
       if (changeInfo.url.includes(browser.runtime.id)) return;
       
       if (site.blocked) {
-        redirectToBlocked(tabId, domain, 'blocked');
+        redirectToBlocked(tabId, changeInfo.url, site, 'blocked');
         return;
       }
       
-      if (hasActivePass(site.domain)) {
+      const hasPass = await hasActivePass(hostname);
+      if (hasPass) {
         return;
       }
       
-      redirectToBlocked(tabId, site.domain, 'choose');
+      redirectToBlocked(tabId, changeInfo.url, site, 'choose');
       
     } catch (e) {
       console.error('[LOCKD] Error:', e);
@@ -266,35 +293,39 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name.startsWith('pass-')) {
     const domain = alarm.name.replace('pass-', '');
     
-    // Remove the pass
+    await ensureInitialized();
     delete activePasses[domain];
     await browser.storage.local.set({ passes: activePasses });
     
     console.log(`[LOCKD] Pass expired: ${domain}`);
     
-    // Check all tabs and redirect any that are on this domain
     await checkTabsForExpiredPasses(domain);
   }
 });
 
 // Message handling
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender).then(sendResponse);
+  handleMessage(message, sender).then(sendResponse).catch(e => {
+    console.error('[LOCKD] Message handler error:', e);
+    sendResponse({ error: e.message });
+  });
   return true;
 });
 
 async function handleMessage(message, sender) {
+  await ensureInitialized();
+  
   switch (message.action) {
     case 'getConfig':
-      const stored = await browser.storage.local.get(['config']);
-      return stored.config || DEFAULT_CONFIG;
+      const storedConfig = await browser.storage.local.get(['config']);
+      return storedConfig.config || DEFAULT_CONFIG;
     
     case 'saveConfig':
       await browser.storage.local.set({ config: message.config });
       return { success: true };
     
     case 'getSiteConfig':
-      return await getSiteConfig(message.domain);
+      return await getSiteConfig(message.hostname);
     
     case 'grantPass':
       await grantPass(message.domain, message.type, message.duration);
@@ -306,26 +337,22 @@ async function handleMessage(message, sender) {
     
     case 'getAllPasses':
       cleanExpiredPasses();
-      return activePasses;
+      return { ...activePasses };
     
     case 'revokePass':
       delete activePasses[message.domain];
       await browser.storage.local.set({ passes: activePasses });
-      // Also cancel the alarm
       browser.alarms.clear(`pass-${message.domain}`);
-      // Check tabs immediately
       await checkTabsForExpiredPasses(message.domain);
       return { success: true };
     
     case 'revokeAllPasses':
-      // Cancel all pass alarms
       for (const domain in activePasses) {
         browser.alarms.clear(`pass-${domain}`);
       }
       const domains = Object.keys(activePasses);
       activePasses = {};
       await browser.storage.local.set({ passes: activePasses });
-      // Check tabs for all previously active domains
       for (const domain of domains) {
         await checkTabsForExpiredPasses(domain);
       }

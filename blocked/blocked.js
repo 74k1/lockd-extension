@@ -1,13 +1,13 @@
-// LOCKD - Blocked Page Script
-
 const browser = globalThis.browser || globalThis.chrome;
 
 const params = new URLSearchParams(window.location.search);
+const originalUrl = params.get('url');
 const domain = params.get('domain');
 const mode = params.get('mode');
 
 let siteConfig = null;
 let config = null;
+let originalHostname = '';
 
 // DOM Elements
 const domainEl = document.getElementById('domain');
@@ -59,13 +59,11 @@ function getRandomLine() {
 }
 
 function showScreen(screenId) {
-  // Hide all screens
   chooseScreen.classList.remove('active');
   waitingScreen.classList.remove('active');
   durationScreen.classList.remove('active');
   blockedScreen.classList.remove('active');
   
-  // Show requested screen
   const screen = document.getElementById(`${screenId}-screen`);
   if (screen) {
     screen.classList.add('active');
@@ -73,8 +71,16 @@ function showScreen(screenId) {
 }
 
 async function init() {
-  // Set domain display
-  domainEl.textContent = domain || 'Unknown';
+  // Parse original URL to get hostname for display
+  try {
+    const urlObj = new URL(originalUrl);
+    originalHostname = urlObj.hostname.replace(/^www\./, '');
+  } catch (e) {
+    originalHostname = domain || 'Unknown';
+  }
+  
+  // Display the actual hostname (e.g., music.youtube.com)
+  domainEl.textContent = originalHostname;
   
   // Set random motivational line
   if (motivationalText) {
@@ -84,15 +90,19 @@ async function init() {
   // Get config from background
   try {
     config = await browser.runtime.sendMessage({ action: 'getConfig' });
-    siteConfig = await browser.runtime.sendMessage({ action: 'getSiteConfig', domain });
+    siteConfig = await browser.runtime.sendMessage({ action: 'getSiteConfig', hostname: originalHostname });
   } catch (e) {
     console.error('[LOCKD] Failed to get config:', e);
     return;
   }
   
   if (!siteConfig) {
-    // Site not configured, go back
-    window.history.back();
+    // Site not configured, go back to original URL
+    if (originalUrl) {
+      window.location.href = originalUrl;
+    } else {
+      window.history.back();
+    }
     return;
   }
   
@@ -179,6 +189,8 @@ btnConfirm.addEventListener('click', async () => {
 
 async function grantAccessAndRedirect(type, duration) {
   try {
+    // Grant pass for the base domain (from site config)
+    // This allows all subdomains to work
     await browser.runtime.sendMessage({
       action: 'grantPass',
       domain: siteConfig.domain,
@@ -186,8 +198,13 @@ async function grantAccessAndRedirect(type, duration) {
       duration
     });
     
-    // Redirect immediately
-    window.location.href = `https://${domain}`;
+    // Redirect to original URL (preserving full path, query, subdomain, etc.)
+    if (originalUrl) {
+      window.location.href = originalUrl;
+    } else {
+      // Fallback to just the hostname
+      window.location.href = `https://${originalHostname}`;
+    }
   } catch (e) {
     console.error('[LOCKD] Failed to grant pass:', e);
   }
