@@ -7,9 +7,11 @@ let hasChanges = false;
 const sitesListEl = document.getElementById('sites-list');
 const saveBar = document.getElementById('save-bar');
 const toast = document.getElementById('toast');
+const versionEl = document.getElementById('version');
 
 const newSiteDomain = document.getElementById('new-site-domain');
 const newSiteName = document.getElementById('new-site-name');
+const newSiteMatch = document.getElementById('new-site-match');
 const btnAddSite = document.getElementById('btn-add-site');
 
 const workDuration = document.getElementById('work-duration');
@@ -62,16 +64,29 @@ function createXIcon() {
   return svg;
 }
 
+function getMatchDisplayName(match) {
+  switch (match) {
+    case 'base': return 'Base Domain';
+    case 'exact': return 'Exact';
+    case 'regex': return 'Regex';
+    default: return 'Base Domain';
+  }
+}
+
 async function init() {
   config = await browser.runtime.sendMessage({ action: 'getConfig' });
   originalConfig = JSON.parse(JSON.stringify(config));
+  
+  const version = await browser.runtime.sendMessage({ action: 'getVersion' });
+  if (version && versionEl) {
+    versionEl.textContent = `v${version}`;
+  }
   
   renderSites();
   renderSettings();
 }
 
 function renderSites() {
-  // Clear existing content safely
   while (sitesListEl.firstChild) {
     sitesListEl.removeChild(sitesListEl.firstChild);
   }
@@ -96,23 +111,46 @@ function renderSites() {
       siteInfo.appendChild(nameEl);
     }
     
+    const matchDiv = document.createElement('div');
+    matchDiv.className = 'site-match';
+    
+    const matchSelect = document.createElement('select');
+    
+    const optBase = document.createElement('option');
+    optBase.value = 'base';
+    optBase.textContent = 'Base Domain';
+    matchSelect.appendChild(optBase);
+    
+    const optExact = document.createElement('option');
+    optExact.value = 'exact';
+    optExact.textContent = 'Exact';
+    matchSelect.appendChild(optExact);
+    
+    const optRegex = document.createElement('option');
+    optRegex.value = 'regex';
+    optRegex.textContent = 'Regex';
+    matchSelect.appendChild(optRegex);
+    
+    matchSelect.value = site.match || 'base';
+    matchSelect.addEventListener('change', () => {
+      config.sites[index].match = matchSelect.value;
+      markChanged();
+    });
+    matchDiv.appendChild(matchSelect);
+    
     // Site options
     const siteOptions = document.createElement('div');
     siteOptions.className = 'site-options';
     
-    // Work checkbox
     const workGroup = createCheckboxGroup('Work', site.work, index, 'work');
     siteOptions.appendChild(workGroup);
     
-    // Private checkbox
     const privateGroup = createCheckboxGroup('Private', site.private, index, 'private');
     siteOptions.appendChild(privateGroup);
     
-    // Block checkbox
     const blockGroup = createCheckboxGroup('Block', site.blocked, index, 'blocked', true);
     siteOptions.appendChild(blockGroup);
     
-    // Remove button
     const removeBtn = document.createElement('button');
     removeBtn.className = 'site-remove';
     removeBtn.appendChild(createXIcon());
@@ -124,6 +162,7 @@ function renderSites() {
     siteOptions.appendChild(removeBtn);
     
     item.appendChild(siteInfo);
+    item.appendChild(matchDiv);
     item.appendChild(siteOptions);
     sitesListEl.appendChild(item);
   });
@@ -199,6 +238,17 @@ function validateConfig() {
     return false;
   }
   
+  for (const site of config.sites) {
+    if (site.match === 'regex') {
+      try {
+        new RegExp(site.domain);
+      } catch (e) {
+        showToast(`Invalid regex: ${site.domain}`, true);
+        return false;
+      }
+    }
+  }
+  
   return true;
 }
 
@@ -218,26 +268,43 @@ function updateConfigFromInputs() {
 });
 
 btnAddSite.addEventListener('click', () => {
-  const domain = newSiteDomain.value.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+  const domain = newSiteDomain.value.trim();
   const name = newSiteName.value.trim();
+  const match = newSiteMatch.value;
   
   if (!domain) return;
   
-  if (config.sites.find(s => s.domain === domain)) {
+  let cleanDomain = domain;
+  if (match !== 'regex') {
+    cleanDomain = domain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+  }
+  
+  if (config.sites.find(s => s.domain === cleanDomain)) {
     showToast('Site already exists', true);
     return;
   }
   
+  if (match === 'regex') {
+    try {
+      new RegExp(cleanDomain);
+    } catch (e) {
+      showToast('Invalid regex pattern', true);
+      return;
+    }
+  }
+  
   config.sites.push({
-    domain,
-    name: name || domain,
+    domain: cleanDomain,
+    name: name || cleanDomain,
     work: true,
     private: true,
-    blocked: false
+    blocked: false,
+    match: match
   });
   
   newSiteDomain.value = '';
   newSiteName.value = '';
+  newSiteMatch.value = 'base';
   
   renderSites();
   markChanged();

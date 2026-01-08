@@ -12,7 +12,7 @@
     }
 
     .container {
-      max-width: 800px;
+      max-width: 900px;
       margin: 0 auto;
     }
 
@@ -67,7 +67,7 @@
       align-items: center;
       padding: 12px 0;
       border-bottom: 1px solid var(--base02);
-      gap: 16px;
+      gap: 12px;
     }
 
     .site-item:last-child {
@@ -82,6 +82,7 @@
     .site-domain {
       font-size: 14px;
       color: var(--base06);
+      word-break: break-all;
     }
 
     .site-name {
@@ -90,9 +91,19 @@
       margin-top: 2px;
     }
 
+    .site-match {
+      flex-shrink: 0;
+    }
+
+    .site-match select {
+      width: 110px;
+      padding: 6px 8px;
+      font-size: 11px;
+    }
+
     .site-options {
       display: flex;
-      gap: 16px;
+      gap: 12px;
       align-items: center;
       flex-shrink: 0;
     }
@@ -171,10 +182,40 @@
       padding-top: 16px;
       border-top: 1px solid var(--base02);
       margin-top: 16px;
+      flex-wrap: wrap;
     }
 
-    .add-site-form input {
+    .add-site-form input[type="text"] {
       flex: 1;
+      min-width: 150px;
+    }
+
+    .add-site-form select {
+      width: 110px;
+    }
+
+    /* Match mode help */
+    .match-help {
+      margin-top: 16px;
+      padding: 16px;
+      background-color: var(--base00);
+      border: 1px solid var(--base02);
+      font-size: 12px;
+      color: var(--base04);
+    }
+
+    .match-help code {
+      background-color: var(--base02);
+      padding: 2px 6px;
+      color: var(--base0C);
+    }
+
+    .match-help p {
+      margin-bottom: 8px;
+    }
+
+    .match-help p:last-child {
+      margin-bottom: 0;
     }
 
     /* Settings rows */
@@ -218,7 +259,6 @@
       font-size: 12px;
     }
 
-    /* Number inputs - hide spinners */
     input[type="number"] {
       -moz-appearance: textfield;
       appearance: textfield;
@@ -235,7 +275,6 @@
       text-align: center;
     }
 
-    /* Range group for min/default/max */
     .range-group {
       display: flex;
       align-items: center;
@@ -275,7 +314,6 @@
       margin-left: 4px;
     }
 
-    /* Save bar */
     .save-bar {
       position: fixed;
       bottom: 0;
@@ -299,7 +337,6 @@
       min-width: 160px;
     }
 
-    /* Toast */
     .toast {
       position: fixed;
       bottom: 100px;
@@ -324,6 +361,13 @@
       background-color: var(--base08);
     }
 
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: var(--base03);
+      font-size: 11px;
+    }
+
     .footer-space {
       height: 100px;
     }
@@ -344,9 +388,19 @@
       <div class="section-content">
         <div id="sites-list"></div>
         <div class="add-site-form">
-          <input type="text" id="new-site-domain" placeholder="example.com">
+          <input type="text" id="new-site-domain" placeholder="domain or regex pattern">
           <input type="text" id="new-site-name" placeholder="Name (optional)">
+          <select id="new-site-match">
+            <option value="base">Base Domain</option>
+            <option value="exact">Exact</option>
+            <option value="regex">Regex</option>
+          </select>
           <button class="primary" id="btn-add-site">ADD</button>
+        </div>
+        <div class="match-help">
+          <p><code>Base Domain</code> - Matches the domain and all subdomains. <code>youtube.com</code> blocks <code>music.youtube.com</code></p>
+          <p><code>Exact</code> - Exact hostname match only. <code>youtube.com</code> won't block <code>music.youtube.com</code></p>
+          <p><code>Regex</code> - Regular expression. <code>.*\.google\.com</code> matches all Google subdomains</p>
         </div>
       </div>
     </div>
@@ -411,6 +465,10 @@
       <div class="section-content">
         <button class="danger" id="btn-reset">Reset to Defaults</button>
       </div>
+    </div>
+
+    <div class="footer">
+      <span id="version"></span>
     </div>
 
     <div class="footer-space"></div>

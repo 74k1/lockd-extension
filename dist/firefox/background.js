@@ -1,17 +1,17 @@
 const browser = globalThis.browser || globalThis.chrome;
 
 const DEFAULT_SITES = [
-  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false },
-  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false },
-  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false },
-  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false },
-  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false },
-  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false },
-  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false },
-  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false },
-  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false },
-  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false },
-  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false },
+  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base' },
+  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base' },
+  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base' },
+  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base' },
+  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base' },
+  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact' },
+  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base' },
+  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base' },
+  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base' },
+  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base' },
+  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base' },
 ];
 
 const DEFAULT_CONFIG = {
@@ -27,7 +27,6 @@ const DEFAULT_CONFIG = {
 let activePasses = {};
 let isInitialized = false;
 
-// Ensure we have loaded state from storage
 async function ensureInitialized() {
   if (isInitialized) return;
   
@@ -35,31 +34,6 @@ async function ensureInitialized() {
   
   if (!stored.config) {
     await browser.storage.local.set({ config: DEFAULT_CONFIG });
-  } else {
-    // Migrate old config if needed
-    let needsUpdate = false;
-    const config = stored.config;
-    
-    if (config.privateDurationMin === undefined) {
-      config.privateDurationMin = 5;
-      needsUpdate = true;
-    }
-    if (config.privateDurationMax === undefined) {
-      config.privateDurationMax = config.privateDuration || 30;
-      needsUpdate = true;
-    }
-    if (config.privateDurationDefault === undefined) {
-      config.privateDurationDefault = config.privateDuration || 15;
-      needsUpdate = true;
-    }
-    if (config.privateDuration !== undefined) {
-      delete config.privateDuration;
-      needsUpdate = true;
-    }
-    
-    if (needsUpdate) {
-      await browser.storage.local.set({ config });
-    }
   }
   
   if (stored.passes) {
@@ -71,19 +45,16 @@ async function ensureInitialized() {
   console.log('[LOCKD] Initialized');
 }
 
-// Initialize on install
 browser.runtime.onInstalled.addListener(async () => {
   isInitialized = false;
   await ensureInitialized();
 });
 
-// Initialize on startup
 browser.runtime.onStartup.addListener(async () => {
   isInitialized = false;
   await ensureInitialized();
 });
 
-// Clean expired passes
 function cleanExpiredPasses() {
   const now = Date.now();
   let changed = false;
@@ -100,52 +71,57 @@ function cleanExpiredPasses() {
   }
 }
 
-// Check if domain has active pass
+function hostnameMatchesSite(hostname, site) {
+  const mode = site.match || 'base';
+  
+  switch (mode) {
+    case 'exact':
+      return hostname === site.domain;
+    
+    case 'regex':
+      try {
+        const regex = new RegExp(site.domain);
+        return regex.test(hostname);
+      } catch (e) {
+        console.error(`[LOCKD] Invalid regex: ${site.domain}`, e);
+        return false;
+      }
+    
+    case 'base':
+    default:
+      return hostname === site.domain || hostname.endsWith('.' + site.domain);
+  }
+}
+
+async function getSiteConfig(hostname) {
+  await ensureInitialized();
+  const stored = await browser.storage.local.get(['config']);
+  const config = stored.config || DEFAULT_CONFIG;
+  
+  for (const site of config.sites) {
+    if (hostnameMatchesSite(hostname, site)) {
+      return site;
+    }
+  }
+  
+  return null;
+}
+
 async function hasActivePass(hostname) {
   await ensureInitialized();
   cleanExpiredPasses();
   
-  // Check exact hostname first
-  if (activePasses[hostname] && activePasses[hostname].expiresAt > Date.now()) {
-    return true;
-  }
+  const site = await getSiteConfig(hostname);
+  if (!site) return false;
   
-  // Check base domain
-  const baseDomain = getBaseDomain(hostname);
-  if (baseDomain !== hostname && activePasses[baseDomain] && activePasses[baseDomain].expiresAt > Date.now()) {
+  const pass = activePasses[site.domain];
+  if (pass && pass.expiresAt > Date.now()) {
     return true;
   }
   
   return false;
 }
 
-// Get the base domain from a hostname
-function getBaseDomain(hostname) {
-  const parts = hostname.split('.');
-  if (parts.length > 2) {
-    return parts.slice(-2).join('.');
-  }
-  return hostname;
-}
-
-// Get site config for domain
-async function getSiteConfig(hostname) {
-  await ensureInitialized();
-  const stored = await browser.storage.local.get(['config']);
-  const config = stored.config || DEFAULT_CONFIG;
-  
-  // Try exact match first
-  let site = config.sites.find(s => hostname === s.domain);
-  
-  // Try subdomain match
-  if (!site) {
-    site = config.sites.find(s => hostname.endsWith('.' + s.domain));
-  }
-  
-  return site;
-}
-
-// Grant pass for domain
 async function grantPass(domain, type, durationMinutes) {
   await ensureInitialized();
   
@@ -166,7 +142,6 @@ async function grantPass(domain, type, durationMinutes) {
   console.log(`[LOCKD] Pass granted: ${domain} (${type}) for ${durationMinutes} minutes`);
 }
 
-// Redirect to blocked page
 function redirectToBlocked(tabId, originalUrl, siteConfig, mode) {
   const blockedUrl = browser.runtime.getURL(
     `blocked/blocked.html?` +
@@ -178,7 +153,6 @@ function redirectToBlocked(tabId, originalUrl, siteConfig, mode) {
   browser.tabs.update(tabId, { url: blockedUrl });
 }
 
-// Check all tabs for expired passes
 async function checkTabsForExpiredPasses(expiredDomain) {
   await ensureInitialized();
   const stored = await browser.storage.local.get(['config']);
@@ -213,7 +187,6 @@ async function checkTabsForExpiredPasses(expiredDomain) {
   }
 }
 
-// Handle navigation
 if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
   browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
     if (details.frameId !== 0) return;
@@ -288,7 +261,6 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
   });
 }
 
-// Handle alarm (pass expired)
 browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name.startsWith('pass-')) {
     const domain = alarm.name.replace('pass-', '');
@@ -303,7 +275,6 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-// Message handling
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender).then(sendResponse).catch(e => {
     console.error('[LOCKD] Message handler error:', e);
@@ -357,6 +328,10 @@ async function handleMessage(message, sender) {
         await checkTabsForExpiredPasses(domain);
       }
       return { success: true };
+    
+    case 'getVersion':
+      const manifest = browser.runtime.getManifest();
+      return manifest.version;
     
     default:
       return { error: 'Unknown action' };
