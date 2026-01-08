@@ -5,12 +5,19 @@ const toggleEl = document.getElementById('toggle-enabled');
 const passesListEl = document.getElementById('passes-list');
 const btnRevokeAll = document.getElementById('btn-revoke-all');
 const btnSettings = document.getElementById('btn-settings');
+const versionEl = document.getElementById('version');
 
 let config = null;
 
 async function init() {
   try {
     config = await browser.runtime.sendMessage({ action: 'getConfig' });
+    const version = await browser.runtime.sendMessage({ action: 'getVersion' });
+    
+    if (version) {
+      versionEl.textContent = `v${version}`;
+    }
+    
     if (config) {
       updateStatus();
       loadPasses();
@@ -38,7 +45,6 @@ async function loadPasses() {
   try {
     const passes = await browser.runtime.sendMessage({ action: 'getAllPasses' });
     
-    // Clear existing content
     while (passesListEl.firstChild) {
       passesListEl.removeChild(passesListEl.firstChild);
     }
@@ -76,7 +82,6 @@ async function loadPasses() {
       revokeBtn.className = 'pass-revoke';
       revokeBtn.title = 'Revoke pass';
       
-      // Create X icon
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 14 14');
       svg.setAttribute('fill', 'none');
@@ -100,7 +105,6 @@ async function loadPasses() {
       svg.appendChild(line2);
       revokeBtn.appendChild(svg);
       
-      // Add click handler
       const domainToRevoke = domain;
       revokeBtn.addEventListener('click', async () => {
         await browser.runtime.sendMessage({ action: 'revokePass', domain: domainToRevoke });
