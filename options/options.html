@@ -552,6 +552,41 @@
     .footer-space {
       height: 100px;
     }
+
+    /* Toggle switch */
+    .toggle-container {
+      flex-shrink: 0;
+    }
+
+    .toggle {
+      width: 48px;
+      height: 26px;
+      background-color: var(--base02);
+      border: 1px solid var(--base03);
+      cursor: pointer;
+      position: relative;
+      transition: background-color 0.2s ease;
+    }
+
+    .toggle-knob {
+      width: 20px;
+      height: 20px;
+      background-color: var(--base04);
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .toggle.active {
+      background-color: var(--base0D);
+      border-color: var(--base0D);
+    }
+
+    .toggle.active .toggle-knob {
+      background-color: var(--base00);
+      left: 24px;
+    }
   </style>
 </head>
 <body>
@@ -667,6 +702,17 @@
         <span class="section-title">Analytics</span>
       </div>
       <div class="section-content">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Track all browsing</div>
+            <div class="setting-desc">Record time spent on ALL sites, not just managed ones</div>
+          </div>
+          <div class="toggle-container">
+            <div class="toggle" id="toggle-track-all">
+              <div class="toggle-knob"></div>
+            </div>
+          </div>
+        </div>
         <div class="setting-row" style="border-bottom: none;">
           <div class="setting-info">
             <div class="setting-label">Usage Analytics</div>

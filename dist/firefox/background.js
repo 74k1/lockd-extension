@@ -26,10 +26,44 @@ const DEFAULT_CONFIG = {
   extraTimeMax: 60,
   extraTimeDefault: 5,
   enabled: true,
+  // Analytics settings
+  trackAllBrowsing: false, // When true, track time on ALL sites, not just configured ones
 };
 
 // Analytics data retention period (days)
 const ANALYTICS_RETENTION_DAYS = 90;
+
+// Domain aliases - map multiple domains to a single canonical domain for analytics
+const DOMAIN_ALIASES = {
+  '4channel.org': '4chan.org',
+  // Future: 'mobile.twitter.com': 'x.com', etc.
+};
+
+// Sites that have meaningful path segments worth tracking
+// Only these sites will have path-level analytics (subreddits, boards, channels, etc.)
+const SITES_WITH_PATHS = {
+  'reddit.com': true,       // r/subreddit
+  '4chan.org': true,        // /g/, /v/, etc.
+  '4channel.org': true,     // same as 4chan
+  'youtube.com': true,      // channels, @handles
+  'twitch.tv': true,        // /channelname
+  'github.com': true,       // /org/repo
+  'stackoverflow.com': true, // /questions, /tags
+  'medium.com': true,       // /@author, /publications
+  'substack.com': true,     // /p/post-name
+  'tumblr.com': true,       // /tagged, /blog
+  'pinterest.com': true,    // /pin, /board
+  // Atlassian products - project/board level tracking
+  'atlassian.net': true,    // /wiki, /jira, /browse
+  'trello.com': true,       // /b/boardname
+  'bitbucket.org': true,    // /org/repo
+};
+
+// Normalize domain through alias mapping
+function normalizeDomain(hostname) {
+  const domain = hostname.replace(/^www\./, '');
+  return DOMAIN_ALIASES[domain] || domain;
+}
 
 let activePasses = {};
 let rationUsage = {};      // { [domain]: { date: 'YYYY-MM-DD', usedSeconds: number } }
@@ -45,6 +79,12 @@ let rationStorageInterval = null;  // 15-second interval for persisting to stora
 let unsavedRationSeconds = {};     // { [domain]: seconds } - in-memory tracking between saves
 let rationExhaustedHandled = {};   // { [domain]: true } - track if we've already handled exhaustion for this domain today
 let isTrackingRationTime = false;  // Guard flag to prevent overlapping trackRationTime calls
+
+// All-browsing analytics tracking state (separate from ration tracking)
+let activeAnalyticsTab = null;     // { tabId, domain, hostname, url } - currently active tab for analytics
+let analyticsTrackingInterval = null; // 1-second interval for analytics time accumulation
+let unsavedAnalyticsSeconds = {};  // { [domain]: { seconds, url } } - in-memory tracking between saves
+let isTrackingAnalyticsTime = false; // Guard flag to prevent overlapping trackAnalyticsTime calls
 
 async function ensureInitialized() {
   if (isInitialized) return;
@@ -124,11 +164,21 @@ function getCurrentHour() {
 }
 
 // Extract the relevant path segment from a URL for analytics
+// Only returns meaningful paths for sites in SITES_WITH_PATHS
 function extractPathSegment(url) {
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.replace(/^www\./, '');
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    
+    // Check if this site should have path tracking
+    const shouldTrackPaths = Object.keys(SITES_WITH_PATHS).some(site => 
+      hostname === site || hostname.endsWith('.' + site)
+    );
+    
+    if (!shouldTrackPaths) {
+      return null; // No path tracking for this site
+    }
     
     // Special handling for Reddit: r/subreddit
     if (hostname.includes('reddit.com') && pathParts[0] === 'r' && pathParts[1]) {
@@ -146,13 +196,39 @@ function extractPathSegment(url) {
       if (pathParts[0] && pathParts[0].startsWith('@')) {
         return pathParts[0];
       }
-      return pathParts[0] || '(home)';
+      return pathParts[0] || null;
     }
     
-    // Default: first segment or (home)
-    return pathParts[0] || '(home)';
+    // Special handling for 4chan/4channel: board names (/g/, /v/, /pol/, etc.)
+    if (hostname.includes('4chan.org') || hostname.includes('4channel.org')) {
+      if (pathParts[0]) {
+        return pathParts[0]; // Just the board name
+      }
+      return null;
+    }
+    
+    // Special handling for Twitch: channel names
+    if (hostname.includes('twitch.tv')) {
+      // Exclude non-channel paths
+      const nonChannelPaths = ['directory', 'videos', 'settings', 'subscriptions', 'inventory', 'wallet', 'drops'];
+      if (pathParts[0] && !nonChannelPaths.includes(pathParts[0])) {
+        return pathParts[0]; // Channel name
+      }
+      return null;
+    }
+    
+    // Special handling for GitHub: org/repo
+    if (hostname.includes('github.com')) {
+      if (pathParts[0] && pathParts[1]) {
+        return `${pathParts[0]}/${pathParts[1]}`;
+      }
+      return pathParts[0] || null;
+    }
+    
+    // Default for other tracked sites: first path segment
+    return pathParts[0] || null;
   } catch (e) {
-    return '(unknown)';
+    return null;
   }
 }
 
@@ -207,13 +283,16 @@ function cleanExpiredAnalytics() {
 function updateAnalytics(domain, url, seconds) {
   const hour = getCurrentHour();
   const path = extractPathSegment(url);
-  const entry = ensureAnalyticsEntry(domain);
+  const normalizedDomain = normalizeDomain(domain);
+  const entry = ensureAnalyticsEntry(normalizedDomain);
   
   // Update hourly tracking
   entry.hours[hour] = (entry.hours[hour] || 0) + seconds;
   
-  // Update path tracking
-  entry.paths[path] = (entry.paths[path] || 0) + seconds;
+  // Update path tracking (only if path is meaningful)
+  if (path) {
+    entry.paths[path] = (entry.paths[path] || 0) + seconds;
+  }
   
   // Update total
   entry.totalSeconds += seconds;
@@ -226,17 +305,17 @@ async function saveAnalyticsToStorage() {
 
 // Record a block event in analytics
 function recordBlockEvent(domain) {
-  ensureAnalyticsEntry(domain).blocks++;
+  ensureAnalyticsEntry(normalizeDomain(domain)).blocks++;
 }
 
 // Record overtime in analytics
 function recordOvertimeInAnalytics(domain, seconds) {
-  ensureAnalyticsEntry(domain).overtimeSeconds += seconds;
+  ensureAnalyticsEntry(normalizeDomain(domain)).overtimeSeconds += seconds;
 }
 
 // Record feeling in analytics
 function recordFeelingInAnalytics(domain, feeling) {
-  ensureAnalyticsEntry(domain).feelings.push(feeling);
+  ensureAnalyticsEntry(normalizeDomain(domain)).feelings.push(feeling);
 }
 
 // Clean up ration usage entries from previous days
@@ -370,7 +449,11 @@ function startRationTracking() {
   // Start the 15-second storage save interval
   rationStorageInterval = setInterval(async () => {
     await saveRationUsageToStorage();
+    await saveAnalyticsSecondsToStorage(); // Also save all-browsing analytics
   }, 15000); // Every 15 seconds
+  
+  // Start analytics tracking for all browsing
+  startAnalyticsTracking();
   
   console.log('[LOCKD] Ration tracking started (1s tracking, 15s saves)');
   
@@ -384,6 +467,7 @@ async function initializeActiveTab() {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
     if (tabs.length > 0 && tabs[0].id) {
       await updateActiveRationTab(tabs[0].id);
+      await updateActiveAnalyticsTab(tabs[0].id);
     }
   } catch (e) {
     console.error('[LOCKD] Error initializing active tab:', e);
@@ -393,6 +477,7 @@ async function initializeActiveTab() {
 // Handle tab activation
 async function handleTabActivated(activeInfo) {
   await updateActiveRationTab(activeInfo.tabId);
+  await updateActiveAnalyticsTab(activeInfo.tabId);
 }
 
 // Handle tab URL changes
@@ -404,6 +489,7 @@ async function handleTabUpdated(tabId, changeInfo, tab) {
       const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
       if (activeTabs.length > 0 && activeTabs[0].id === tabId) {
         await updateActiveRationTab(tabId);
+        await updateActiveAnalyticsTab(tabId);
       }
     } catch (e) {
       // Ignore errors
@@ -416,7 +502,8 @@ async function handleWindowFocusChanged(windowId) {
   if (windowId === browser.windows.WINDOW_ID_NONE) {
     // Browser lost focus, stop tracking
     activeRationTab = null;
-    console.log('[LOCKD] Window unfocused, pausing ration tracking');
+    activeAnalyticsTab = null;
+    console.log('[LOCKD] Window unfocused, pausing tracking');
     return;
   }
   
@@ -425,6 +512,7 @@ async function handleWindowFocusChanged(windowId) {
     const tabs = await browser.tabs.query({ active: true, windowId });
     if (tabs.length > 0) {
       await updateActiveRationTab(tabs[0].id);
+      await updateActiveAnalyticsTab(tabs[0].id);
     }
   } catch (e) {
     console.error('[LOCKD] Error getting active tab:', e);
@@ -549,6 +637,99 @@ function trackRationTime() {
     console.error('[LOCKD] Error in trackRationTime:', e);
     isTrackingRationTime = false;
   });
+}
+
+// Track analytics time for ALL browsing (called every 1 second when trackAllBrowsing is enabled)
+function trackAnalyticsTime() {
+  if (!activeAnalyticsTab) return;
+  if (!isInitialized) return;
+  if (isTrackingAnalyticsTime) return; // Prevent overlapping calls
+  
+  isTrackingAnalyticsTime = true;
+  const { domain, url } = activeAnalyticsTab;
+  
+  // Get config to check if trackAllBrowsing is enabled
+  browser.storage.local.get(['config']).then(stored => {
+    const config = stored.config || DEFAULT_CONFIG;
+    
+    if (!config.trackAllBrowsing) {
+      isTrackingAnalyticsTime = false;
+      return;
+    }
+    
+    // Update analytics (1 second)
+    const normalizedDomain = normalizeDomain(domain);
+    updateAnalytics(normalizedDomain, url, 1);
+    
+    // Track unsaved seconds for batch saving
+    if (!unsavedAnalyticsSeconds[normalizedDomain]) {
+      unsavedAnalyticsSeconds[normalizedDomain] = { seconds: 0, url };
+    }
+    unsavedAnalyticsSeconds[normalizedDomain].seconds++;
+    unsavedAnalyticsSeconds[normalizedDomain].url = url;
+    
+    isTrackingAnalyticsTime = false;
+  }).catch(e => {
+    console.error('[LOCKD] Error in trackAnalyticsTime:', e);
+    isTrackingAnalyticsTime = false;
+  });
+}
+
+// Update active analytics tab (for all-browsing tracking)
+async function updateActiveAnalyticsTab(tabId) {
+  await ensureInitialized();
+  
+  try {
+    const tab = await browser.tabs.get(tabId);
+    if (!tab.url) {
+      activeAnalyticsTab = null;
+      return;
+    }
+    
+    // Skip extension pages, chrome:// urls, etc.
+    if (!tab.url.startsWith('http://') && !tab.url.startsWith('https://')) {
+      activeAnalyticsTab = null;
+      return;
+    }
+    
+    const url = new URL(tab.url);
+    const hostname = url.hostname.replace(/^www\./, '');
+    const normalizedDomain = normalizeDomain(hostname);
+    
+    activeAnalyticsTab = { tabId, domain: normalizedDomain, hostname, url: tab.url };
+  } catch (e) {
+    activeAnalyticsTab = null;
+  }
+}
+
+// Start analytics tracking for all browsing
+function startAnalyticsTracking() {
+  // Clear existing interval
+  if (analyticsTrackingInterval) {
+    clearInterval(analyticsTrackingInterval);
+  }
+  
+  // Start the 1-second tracking interval
+  analyticsTrackingInterval = setInterval(() => {
+    trackAnalyticsTime();
+  }, 1000);
+  
+  console.log('[LOCKD] All-browsing analytics tracking started');
+}
+
+// Save analytics seconds to storage (called by the existing storage interval)
+async function saveAnalyticsSecondsToStorage() {
+  if (Object.keys(unsavedAnalyticsSeconds).length === 0) return;
+  
+  // Log which domains were tracked
+  for (const [domain, data] of Object.entries(unsavedAnalyticsSeconds)) {
+    if (data.seconds > 0) {
+      console.log(`[LOCKD] Analytics saved: ${domain} +${data.seconds}s`);
+    }
+  }
+  
+  unsavedAnalyticsSeconds = {};
+  await saveAnalyticsToStorage();
 }
 
 // Log a feeling after overtime expires

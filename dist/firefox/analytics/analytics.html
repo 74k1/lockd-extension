@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOCKD - Analytics</title>
+  <link rel="stylesheet" href="../styles/common.css">
+  <style>
+    /* Fallback in case common.css doesn't load */
+    :root {
+      --base00: #07060B;
+      --base01: #1C1B28;
+      --base02: #323246;
+      --base03: #4C4B69;
+      --base04: #72708E;
+      --base05: #BFBDCA;
+      --base06: #EBE9F1;
+      --base07: #FFFFFF;
+      --base08: #FF4B72;
+      --base09: #FF9A5B;
+      --base0A: #FFE15A;
+      --base0B: #54FF80;
+      --base0C: #5BEBEB;
+      --base0D: #7089FF;
+      --base0E: #AB72FF;
+      --base0F: #E366D9;
+    }
+
+    body {
+      min-height: 100vh;
+      padding: 40px;
+      font-family: monospace;
+      background-color: var(--base00);
+      color: var(--base05);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 40px;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logo {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--base07);
+      letter-spacing: 6px;
+    }
+
+    .subtitle {
+      color: var(--base04);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 12px;
+    }
+
+    .header-nav a {
+      color: var(--base04);
+      text-decoration: none;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 8px 16px;
+      border: 1px solid var(--base02);
+      transition: all 0.15s ease;
+    }
+
+    .header-nav a:hover {
+      color: var(--base07);
+      border-color: var(--base04);
+    }
+
+    .section {
+      background-color: var(--base01);
+      border: 1px solid var(--base02);
+      margin-bottom: 24px;
+    }
+
+    .section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--base02);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--base06);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .section-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .section-controls select {
+      padding: 6px 12px;
+      font-size: 11px;
+      min-width: 120px;
+    }
+
+    .section-content {
+      padding: 20px;
+    }
+
+    /* Heatmap Styles */
+    .heatmap-container {
+      overflow-x: auto;
+    }
+
+    .heatmap {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      width: 100%;
+    }
+
+    .heatmap-row {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .heatmap-label {
+      width: 40px;
+      min-width: 40px;
+      font-size: 10px;
+      color: var(--base04);
+      text-transform: uppercase;
+    }
+
+    .heatmap-months {
+      display: flex;
+      gap: 3px;
+      margin-left: 43px;
+      margin-bottom: 8px;
+      width: calc(100% - 43px);
+    }
+
+    .heatmap-month {
+      font-size: 10px;
+      color: var(--base04);
+      text-transform: uppercase;
+    }
+
+    .heatmap-cell {
+      flex: 1;
+      min-width: 8px;
+      max-width: 20px;
+      aspect-ratio: 1;
+      background-color: var(--base01);
+      border: 1px solid var(--base02);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .heatmap-cell[data-level="0"] { background-color: var(--base01); }
+    .heatmap-cell[data-level="1"] { background-color: var(--base02); }
+    .heatmap-cell[data-level="2"] { background-color: var(--base03); }
+    .heatmap-cell[data-level="3"] { background-color: var(--base0E); }
+    .heatmap-cell[data-level="4"] { 
+      background-color: var(--base0D); 
+      box-shadow: 0 0 4px var(--base0D);
+    }
+
+    .heatmap-cell:hover {
+      border-color: var(--base07);
+      box-shadow: 0 0 8px currentColor;
+      z-index: 1;
+      position: relative;
+    }
+
+    .heatmap-legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      font-size: 10px;
+      color: var(--base04);
+    }
+
+    .heatmap-legend-cells {
+      display: flex;
+      gap: 2px;
+    }
+
+    .heatmap-legend .heatmap-cell {
+      cursor: default;
+    }
+
+    .heatmap-legend .heatmap-cell:hover {
+      transform: none;
+      box-shadow: none;
+      border-color: var(--base02);
+    }
+
+    .heatmap-legend .heatmap-cell[data-level="4"]:hover {
+      box-shadow: 0 0 4px var(--base0D);
+    }
+
+    /* Daily Trend Styles */
+    .trend-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 150px;
+      padding: 20px 0;
+    }
+
+    .trend-bar-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+    }
+
+    .trend-bar {
+      width: 100%;
+      max-width: 20px;
+      display: flex;
+      flex-direction: column-reverse;
+      transition: all 0.3s ease;
+    }
+
+    .trend-bar-segment {
+      width: 100%;
+      min-height: 1px;
+      transition: all 0.15s ease;
+    }
+
+    .trend-bar-container:hover .trend-bar-segment {
+      opacity: 0.8;
+    }
+
+    .trend-date {
+      font-size: 9px;
+      color: var(--base04);
+      margin-top: 8px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      transform: rotate(180deg);
+    }
+
+    .trend-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--base02);
+    }
+
+    .trend-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--base04);
+    }
+
+    .trend-legend-color {
+      width: 12px;
+      height: 12px;
+    }
+
+    /* Top Sites Styles */
+    .sites-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .site-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .site-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .site-header:hover .site-name {
+      color: var(--base07);
+    }
+
+    .site-color {
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+
+    .site-name {
+      font-size: 13px;
+      color: var(--base06);
+      flex: 1;
+      transition: color 0.15s ease;
+    }
+
+    .site-time {
+      font-size: 12px;
+      color: var(--base04);
+      margin-right: 8px;
+    }
+
+    .site-percent {
+      font-size: 11px;
+      color: var(--base03);
+      width: 45px;
+      text-align: right;
+    }
+
+    .site-bar-container {
+      flex: 1;
+      max-width: 300px;
+      height: 8px;
+      background-color: var(--base02);
+    }
+
+    .site-bar {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .site-paths {
+      display: none;
+      margin-left: 24px;
+      padding-left: 12px;
+      border-left: 1px solid var(--base02);
+    }
+
+    .site-item.expanded .site-paths {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .site-expand {
+      font-size: 10px;
+      color: var(--base04);
+      transition: transform 0.2s ease;
+    }
+
+    .site-item.expanded .site-expand {
+      transform: rotate(180deg);
+    }
+
+    .path-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+    }
+
+    .path-name {
+      color: var(--base04);
+      flex: 1;
+    }
+
+    .path-time {
+      color: var(--base03);
+    }
+
+    .path-bar-container {
+      width: 100px;
+      height: 4px;
+      background-color: var(--base02);
+    }
+
+    .path-bar {
+      height: 100%;
+      background-color: var(--base04);
+    }
+
+    /* Peak Hours Styles */
+    .peak-hours {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 80px;
+    }
+
+    .peak-hour {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .peak-bar {
+      width: 100%;
+      max-width: 30px;
+      background-color: var(--base0E);
+      transition: all 0.3s ease;
+    }
+
+    .peak-bar:hover {
+      background-color: var(--base0D);
+      box-shadow: 0 0 8px var(--base0D);
+    }
+
+    .peak-label {
+      font-size: 9px;
+      color: var(--base04);
+      margin-top: 6px;
+      height: 12px;
+      line-height: 12px;
+    }
+
+    .peak-summary {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--base04);
+    }
+
+    .peak-summary strong {
+      color: var(--base0D);
+    }
+
+    /* Feelings Styles */
+    .feelings-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .feeling-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .feeling-label {
+      width: 80px;
+      font-size: 12px;
+      color: var(--base06);
+    }
+
+    .feeling-bar-container {
+      flex: 1;
+      height: 20px;
+      background-color: var(--base02);
+      max-width: 400px;
+    }
+
+    .feeling-bar {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .feeling-bar.positive { background-color: var(--base0B); }
+    .feeling-bar.neutral { background-color: var(--base04); }
+    .feeling-bar.negative { background-color: var(--base08); }
+
+    .feeling-count {
+      font-size: 12px;
+      color: var(--base04);
+      width: 80px;
+    }
+
+    /* Stats Summary */
+    .stats-summary {
+      display: flex;
+      gap: 40px;
+      padding: 20px;
+      background-color: var(--base00);
+      border: 1px solid var(--base02);
+      margin-bottom: 24px;
+      align-items: center;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-item.stat-range {
+      margin-left: auto;
+    }
+
+    .stat-item.stat-range select {
+      padding: 8px 12px;
+      font-size: 12px;
+      min-width: 140px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--base07);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--base04);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: fixed;
+      background-color: var(--base01);
+      border: 1px solid var(--base03);
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--base06);
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .tooltip-date {
+      color: var(--base04);
+      margin-bottom: 4px;
+    }
+
+    .tooltip-value {
+      font-weight: 600;
+      color: var(--base07);
+    }
+
+    /* No Data State */
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: var(--base04);
+      font-size: 14px;
+    }
+
+    /* Site Colors */
+    .site-color-0, .trend-legend-color-0 { background-color: var(--base0D); }
+    .site-color-1, .trend-legend-color-1 { background-color: var(--base0E); }
+    .site-color-2, .trend-legend-color-2 { background-color: var(--base0B); }
+    .site-color-3, .trend-legend-color-3 { background-color: var(--base09); }
+    .site-color-4, .trend-legend-color-4 { background-color: var(--base0C); }
+    .site-color-5, .trend-legend-color-5 { background-color: var(--base08); }
+    .site-color-6, .trend-legend-color-6 { background-color: var(--base0A); }
+    .site-color-7, .trend-legend-color-7 { background-color: var(--base0F); }
+
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: var(--base03);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">LOCKD</div>
+        <div class="subtitle">Analytics</div>
+      </div>
+      <div class="header-nav">
+        <a href="../options/options.html">Settings</a>
+      </div>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="stats-summary" id="stats-summary">
+      <div class="stat-item">
+        <div class="stat-value" id="total-time">0h 0m</div>
+        <div class="stat-label">Total Time</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="total-sites">0</div>
+        <div class="stat-label">Sites Tracked</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="total-blocks">0</div>
+        <div class="stat-label">Times Blocked</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="avg-daily">0m</div>
+        <div class="stat-label">Daily Average</div>
+      </div>
+      <div class="stat-item stat-range">
+        <select id="global-range">
+          <option value="7">Last 7 Days</option>
+          <option value="14">Last 14 Days</option>
+          <option value="30" selected>Last 30 Days</option>
+          <option value="90">Last 90 Days</option>
+          <option value="all">All Time</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Usage Heatmap -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Usage Heatmap</span>
+        <div class="section-controls">
+          <select id="heatmap-range">
+            <option value="rolling">Last 12 Months</option>
+            <option value="year">Full Year</option>
+          </select>
+          <select id="heatmap-year">
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+          </select>
+        </div>
+      </div>
+      <div class="section-content">
+        <div class="heatmap-container">
+          <div class="heatmap-months" id="heatmap-months"></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+        <div class="heatmap-legend">
+          <span>Less</span>
+          <div class="heatmap-legend-cells">
+            <div class="heatmap-cell" data-level="0"></div>
+            <div class="heatmap-cell" data-level="1"></div>
+            <div class="heatmap-cell" data-level="2"></div>
+            <div class="heatmap-cell" data-level="3"></div>
+            <div class="heatmap-cell" data-level="4"></div>
+          </div>
+          <span>More</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Trend -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Daily Trend</span>
+      </div>
+      <div class="section-content">
+        <div class="trend-chart" id="trend-chart"></div>
+        <div class="trend-legend" id="trend-legend"></div>
+      </div>
+    </div>
+
+    <!-- Top Sites -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Top Sites</span>
+      </div>
+      <div class="section-content">
+        <div class="sites-list" id="sites-list"></div>
+      </div>
+    </div>
+
+    <!-- Peak Hours -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Peak Hours</span>
+      </div>
+      <div class="section-content">
+        <div class="peak-hours" id="peak-hours"></div>
+        <div class="peak-summary" id="peak-summary"></div>
+      </div>
+    </div>
+
+    <!-- Feelings -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Feelings</span>
+      </div>
+      <div class="section-content">
+        <div class="feelings-bars" id="feelings-bars"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span id="version"></span>
+    </div>
+  </div>
+
+  <!-- Tooltip -->
+  <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+  <script src="analytics.js"></script>
+</body>
+</html>
