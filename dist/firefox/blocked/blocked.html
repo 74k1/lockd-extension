@@ -155,6 +155,131 @@
     .hidden {
       display: none !important;
     }
+
+    /* Ration Expired Screen */
+    .ration-message {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--base0E);
+      margin-bottom: 12px;
+    }
+
+    .ration-subtitle {
+      font-size: 16px;
+      color: var(--base04);
+      margin-bottom: 40px;
+    }
+
+    .extra-time-section {
+      margin-top: 20px;
+    }
+
+    .extra-time-presets {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .preset-btn {
+      background-color: var(--base01);
+      border: 1px solid var(--base03);
+      color: var(--base06);
+      padding: 12px 20px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .preset-btn:hover {
+      background-color: var(--base02);
+      border-color: var(--base0E);
+      color: var(--base0E);
+    }
+
+    .preset-btn.active {
+      background-color: var(--base0E);
+      border-color: var(--base0E);
+      color: var(--base00);
+    }
+
+    .extra-time-slider {
+      margin: 30px 0;
+    }
+
+    #btn-add-time {
+      min-width: 200px;
+      padding: 16px 32px;
+    }
+
+    /* Feelings Screen */
+    .feelings-question {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--base06);
+      margin-bottom: 16px;
+    }
+
+    .feelings-subtitle {
+      font-size: 14px;
+      color: var(--base04);
+      margin-bottom: 40px;
+    }
+
+    .feelings-choices {
+      display: flex;
+      flex-direction: row;
+      gap: 12px;
+      justify-content: center;
+      margin: 0 auto;
+    }
+
+    .feeling-btn {
+      background-color: var(--base01);
+      border: 1px solid var(--base03);
+      color: var(--base06);
+      padding: 16px 24px;
+      font-family: inherit;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .feeling-btn:hover {
+      background-color: var(--base02);
+      border-color: var(--base04);
+    }
+
+    .feeling-btn[data-feeling="neutral"]:hover {
+      border-color: var(--base04);
+    }
+
+    .feeling-btn[data-feeling="positive"]:hover {
+      border-color: var(--base0B);
+      color: var(--base0B);
+    }
+
+    .feeling-btn[data-feeling="negative"]:hover {
+      border-color: var(--base08);
+      color: var(--base08);
+    }
+
+    .feeling-label {
+      font-weight: 600;
+    }
+
+    /* Feelings Response */
+    .feelings-response {
+      font-size: 18px;
+      color: var(--base05);
+      line-height: 1.6;
+      max-width: 400px;
+      margin: 0 auto;
+    }
   </style>
 </head>
 <body>
@@ -212,6 +337,58 @@
       <p class="motivational">You made this choice. Respect it.</p>
       <div style="margin-top: 40px;">
         <button class="secondary" id="btn-back">GO BACK</button>
+      </div>
+    </div>
+
+    <!-- Ration Expired Screen -->
+    <div class="screen" id="ration-expired-screen">
+      <div class="ration-message">
+        <span id="ration-minutes">5</span> minutes. Done.
+      </div>
+      <div class="ration-subtitle">That's your <span id="ration-site-name">site</span> for today.</div>
+      
+      <div class="extra-time-section">
+        <div class="extra-time-presets">
+          <button class="preset-btn" data-minutes="5">+5m</button>
+          <button class="preset-btn" data-minutes="10">+10m</button>
+          <button class="preset-btn" data-minutes="15">+15m</button>
+        </div>
+        
+        <div class="extra-time-slider">
+          <div class="slider-value"><span id="extra-time-value">5</span> <span>min</span></div>
+          <input type="range" id="extra-time-slider" min="1" max="60" value="5" step="1">
+          <div class="slider-labels">
+            <span id="extra-slider-min-label">1 min</span>
+            <span id="extra-slider-max-label">60 min</span>
+          </div>
+        </div>
+        
+        <button class="primary" id="btn-add-time">ADD TIME</button>
+      </div>
+    </div>
+
+    <!-- Feelings Screen -->
+    <div class="screen" id="feelings-screen">
+      <div class="feelings-question">Well?</div>
+      <div class="feelings-subtitle">You spent <span id="feelings-duration">15</span> minutes on <span id="feelings-site-name">site</span>.</div>
+      <div class="feelings-choices">
+        <button class="feeling-btn" id="btn-feeling-positive" data-feeling="positive">
+          <span class="feeling-label">Worth it</span>
+        </button>
+        <button class="feeling-btn" id="btn-feeling-neutral" data-feeling="neutral">
+          <span class="feeling-label">Meh</span>
+        </button>
+        <button class="feeling-btn" id="btn-feeling-negative" data-feeling="negative">
+          <span class="feeling-label">Regret</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Feelings Response Screen -->
+    <div class="screen" id="feelings-response-screen">
+      <div class="feelings-response" id="feelings-response-text"></div>
+      <div style="margin-top: 40px;">
+        <button class="secondary" id="btn-feelings-continue">CONTINUE</button>
       </div>
     </div>
 

@@ -157,6 +157,69 @@
       padding: 20px;
     }
 
+    /* Ration status */
+    .ration-status {
+      margin-bottom: 20px;
+    }
+
+    .ration-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background-color: var(--base01);
+      border: 1px solid var(--base02);
+      margin-bottom: 6px;
+      cursor: help;
+    }
+
+    .ration-domain {
+      font-size: 12px;
+      color: var(--base06);
+    }
+
+    .ration-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ration-usage {
+      font-size: 11px;
+      color: var(--base0E);
+    }
+
+    .ration-bar {
+      width: 60px;
+      height: 4px;
+      background-color: var(--base02);
+      position: relative;
+      display: flex;
+    }
+
+
+
+    .ration-bar-fill {
+      height: 100%;
+      background-color: var(--base0E);
+      transition: width 0.3s ease;
+    }
+
+    .ration-bar-fill.exhausted {
+      background-color: var(--base08);
+    }
+
+    .no-rations {
+      color: var(--base04);
+      font-size: 11px;
+      text-align: center;
+      padding: 12px;
+    }
+
+    .ration-bar-fill.overtime {
+      background-color: var(--base0A);
+    }
+
     .actions {
       display: flex;
       flex-direction: column;
@@ -201,6 +264,13 @@
   </div>
 
   <div class="content">
+    <div class="ration-status" id="ration-section">
+      <div class="section-title">Daily Rations</div>
+      <div id="ration-list">
+        <div class="no-rations">No rationed sites</div>
+      </div>
+    </div>
+
     <div class="active-passes">
       <div class="section-title">Active Passes</div>
       <div id="passes-list">
@@ -210,6 +280,7 @@
 
     <div class="actions">
       <button class="secondary" id="btn-revoke-all">Revoke All Passes</button>
+      <button class="secondary" id="btn-analytics">Analytics</button>
       <button class="primary" id="btn-settings">Settings</button>
     </div>
   </div>

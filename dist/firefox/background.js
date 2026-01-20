@@ -1,17 +1,17 @@
 const browser = globalThis.browser || globalThis.chrome;
 
 const DEFAULT_SITES = [
-  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base' },
-  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base' },
-  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base' },
-  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base' },
-  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base' },
-  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact' },
-  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base' },
-  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base' },
-  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base' },
-  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base' },
-  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base' },
+  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
 ];
 
 const DEFAULT_CONFIG = {
@@ -21,16 +21,35 @@ const DEFAULT_CONFIG = {
   privateDurationMin: 5,
   privateDurationMax: 30,
   privateDurationDefault: 15,
+  // Extra time settings for ration mode
+  extraTimeMin: 1,
+  extraTimeMax: 60,
+  extraTimeDefault: 5,
   enabled: true,
 };
 
+// Analytics data retention period (days)
+const ANALYTICS_RETENTION_DAYS = 90;
+
 let activePasses = {};
+let rationUsage = {};      // { [domain]: { date: 'YYYY-MM-DD', usedSeconds: number } }
+let rationOvertime = {};   // { [domain]: { expiresAt: number, grantedMinutes: number } }
+let feelingsLog = [];      // [{ domain, feeling, timestamp, durationMinutes }]
+let analyticsHistory = {}; // { [date]: { [domain]: { hours: {}, paths: {}, totalSeconds, overtimeSeconds, feelings: [], blocks } } }
 let isInitialized = false;
+
+// Ration tracking state
+let activeRationTab = null;        // { tabId, domain, hostname, url } - currently active tab on a rationed site
+let rationTrackingInterval = null; // 1-second interval for time accumulation
+let rationStorageInterval = null;  // 15-second interval for persisting to storage
+let unsavedRationSeconds = {};     // { [domain]: seconds } - in-memory tracking between saves
+let rationExhaustedHandled = {};   // { [domain]: true } - track if we've already handled exhaustion for this domain today
+let isTrackingRationTime = false;  // Guard flag to prevent overlapping trackRationTime calls
 
 async function ensureInitialized() {
   if (isInitialized) return;
   
-  const stored = await browser.storage.local.get(['config', 'passes']);
+  const stored = await browser.storage.local.get(['config', 'passes', 'rationUsage', 'rationOvertime', 'feelingsLog', 'analyticsHistory']);
   
   if (!stored.config) {
     await browser.storage.local.set({ config: DEFAULT_CONFIG });
@@ -40,7 +59,30 @@ async function ensureInitialized() {
     activePasses = stored.passes;
   }
   
+  if (stored.rationUsage) {
+    rationUsage = stored.rationUsage;
+  }
+  
+  if (stored.rationOvertime) {
+    rationOvertime = stored.rationOvertime;
+  }
+  
+  if (stored.feelingsLog) {
+    feelingsLog = stored.feelingsLog;
+  }
+  
+  if (stored.analyticsHistory) {
+    analyticsHistory = stored.analyticsHistory;
+  }
+  
+  cleanExpiredOvertime();
+  cleanExpiredAnalytics();
+  
   cleanExpiredPasses();
+  cleanExpiredRationUsage();
+  setupMidnightReset();
+  startRationTracking();
+  
   isInitialized = true;
   console.log('[LOCKD] Initialized');
 }
@@ -68,6 +110,553 @@ function cleanExpiredPasses() {
   
   if (changed) {
     browser.storage.local.set({ passes: activePasses });
+  }
+}
+
+// Get today's date as ISO string (YYYY-MM-DD)
+function getTodayString() {
+  return new Date().toISOString().split('T')[0];
+}
+
+// Get current hour (0-23)
+function getCurrentHour() {
+  return new Date().getHours();
+}
+
+// Extract the relevant path segment from a URL for analytics
+function extractPathSegment(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.replace(/^www\./, '');
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    
+    // Special handling for Reddit: r/subreddit
+    if (hostname.includes('reddit.com') && pathParts[0] === 'r' && pathParts[1]) {
+      return `r/${pathParts[1]}`;
+    }
+    
+    // Special handling for YouTube
+    if (hostname.includes('youtube.com')) {
+      if (pathParts[0] === 'channel' && pathParts[1]) {
+        return `channel/${pathParts[1]}`;
+      }
+      if (pathParts[0] === 'c' && pathParts[1]) {
+        return `c/${pathParts[1]}`;
+      }
+      if (pathParts[0] && pathParts[0].startsWith('@')) {
+        return pathParts[0];
+      }
+      return pathParts[0] || '(home)';
+    }
+    
+    // Default: first segment or (home)
+    return pathParts[0] || '(home)';
+  } catch (e) {
+    return '(unknown)';
+  }
+}
+
+/**
+ * Ensure analytics entry exists for a domain on a given date
+ * @param {string} domain - The domain to track
+ * @param {string} [date] - Date string (YYYY-MM-DD), defaults to today
+ * @returns {Object} The analytics entry for the domain
+ */
+function ensureAnalyticsEntry(domain, date = getTodayString()) {
+  if (!analyticsHistory[date]) {
+    analyticsHistory[date] = {};
+  }
+  
+  if (!analyticsHistory[date][domain]) {
+    analyticsHistory[date][domain] = {
+      hours: {},
+      paths: {},
+      totalSeconds: 0,
+      overtimeSeconds: 0,
+      feelings: [],
+      blocks: 0
+    };
+  }
+  
+  return analyticsHistory[date][domain];
+}
+
+/**
+ * Clean up analytics data older than retention period
+ */
+function cleanExpiredAnalytics() {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - ANALYTICS_RETENTION_DAYS);
+  const cutoffString = cutoffDate.toISOString().split('T')[0];
+  
+  let cleaned = 0;
+  for (const date of Object.keys(analyticsHistory)) {
+    if (date < cutoffString) {
+      delete analyticsHistory[date];
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    browser.storage.local.set({ analyticsHistory });
+    console.log(`[LOCKD] Cleaned ${cleaned} old analytics entries (older than ${ANALYTICS_RETENTION_DAYS} days)`);
+  }
+}
+
+// Update analytics history for a domain
+function updateAnalytics(domain, url, seconds) {
+  const hour = getCurrentHour();
+  const path = extractPathSegment(url);
+  const entry = ensureAnalyticsEntry(domain);
+  
+  // Update hourly tracking
+  entry.hours[hour] = (entry.hours[hour] || 0) + seconds;
+  
+  // Update path tracking
+  entry.paths[path] = (entry.paths[path] || 0) + seconds;
+  
+  // Update total
+  entry.totalSeconds += seconds;
+}
+
+// Save analytics to storage (called periodically)
+async function saveAnalyticsToStorage() {
+  await browser.storage.local.set({ analyticsHistory });
+}
+
+// Record a block event in analytics
+function recordBlockEvent(domain) {
+  ensureAnalyticsEntry(domain).blocks++;
+}
+
+// Record overtime in analytics
+function recordOvertimeInAnalytics(domain, seconds) {
+  ensureAnalyticsEntry(domain).overtimeSeconds += seconds;
+}
+
+// Record feeling in analytics
+function recordFeelingInAnalytics(domain, feeling) {
+  ensureAnalyticsEntry(domain).feelings.push(feeling);
+}
+
+// Clean up ration usage entries from previous days
+function cleanExpiredRationUsage() {
+  const today = getTodayString();
+  let changed = false;
+  
+  for (const domain in rationUsage) {
+    if (rationUsage[domain].date !== today) {
+      rationUsage[domain] = { date: today, usedSeconds: 0 };
+      changed = true;
+    }
+  }
+  
+  if (changed) {
+    browser.storage.local.set({ rationUsage });
+    console.log('[LOCKD] Reset ration usage for new day');
+  }
+}
+
+// Setup midnight reset alarm
+function setupMidnightReset() {
+  // Calculate ms until next midnight
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const msUntilMidnight = tomorrow.getTime() - now.getTime();
+  
+  // Create alarm for midnight
+  browser.alarms.create('midnight-reset', {
+    when: Date.now() + msUntilMidnight,
+    periodInMinutes: 24 * 60 // Repeat daily
+  });
+  
+  console.log(`[LOCKD] Midnight reset scheduled in ${Math.round(msUntilMidnight / 1000 / 60)} minutes`);
+}
+
+// Get ration usage for a domain (returns { usedSeconds, budgetSeconds, remaining })
+function getRationStatus(domain, site) {
+  const today = getTodayString();
+  const usage = rationUsage[domain];
+  const usedSeconds = (usage && usage.date === today) ? usage.usedSeconds : 0;
+  const budgetSeconds = (site.rationMinutes || 5) * 60;
+  
+  // Get overtime granted today
+  const overtime = rationOvertime[domain];
+  const overtimeSeconds = overtime ? overtime.grantedMinutes * 60 : 0;
+  const totalBudgetSeconds = budgetSeconds + overtimeSeconds;
+  
+  return {
+    usedSeconds,
+    budgetSeconds,
+    overtimeSeconds,
+    totalBudgetSeconds,
+    remainingSeconds: Math.max(0, totalBudgetSeconds - usedSeconds),
+    isExhausted: usedSeconds >= totalBudgetSeconds
+  };
+}
+
+// Check if a rationed site has budget remaining
+async function hasRationBudget(hostname) {
+  const site = await getSiteConfig(hostname);
+  if (!site || !site.ration) return false;
+  
+  const status = getRationStatus(site.domain, site);
+  return !status.isExhausted;
+}
+
+// Increment ration usage for a domain (in-memory only)
+function incrementRationUsageInMemory(domain, seconds = 1) {
+  const today = getTodayString();
+  
+  if (!rationUsage[domain] || rationUsage[domain].date !== today) {
+    rationUsage[domain] = { date: today, usedSeconds: 0 };
+  }
+  
+  rationUsage[domain].usedSeconds += seconds;
+  
+  // Track unsaved seconds
+  if (!unsavedRationSeconds[domain]) {
+    unsavedRationSeconds[domain] = 0;
+  }
+  unsavedRationSeconds[domain] += seconds;
+  
+  return rationUsage[domain].usedSeconds;
+}
+
+// Save ration usage to storage
+async function saveRationUsageToStorage() {
+  if (Object.keys(unsavedRationSeconds).length === 0) return;
+  
+  await browser.storage.local.set({ rationUsage });
+  
+  // Also save analytics
+  await saveAnalyticsToStorage();
+  
+  // Log which domains were saved
+  for (const [domain, seconds] of Object.entries(unsavedRationSeconds)) {
+    if (seconds > 0) {
+      console.log(`[LOCKD] Saved ration: ${domain} = ${rationUsage[domain]?.usedSeconds || 0}s (+${seconds}s)`);
+    }
+  }
+  
+  unsavedRationSeconds = {};
+}
+
+// Start ration time tracking
+function startRationTracking() {
+  // Track active tab changes
+  browser.tabs.onActivated.addListener(handleTabActivated);
+  browser.tabs.onUpdated.addListener(handleTabUpdated);
+  
+  if (browser.windows && browser.windows.onFocusChanged) {
+    browser.windows.onFocusChanged.addListener(handleWindowFocusChanged);
+  }
+  
+  // Clear existing intervals
+  if (rationTrackingInterval) {
+    clearInterval(rationTrackingInterval);
+  }
+  if (rationStorageInterval) {
+    clearInterval(rationStorageInterval);
+  }
+  
+  // Start the 1-second tracking interval (in-memory)
+  rationTrackingInterval = setInterval(() => {
+    trackRationTime();
+  }, 1000); // Every 1 second
+  
+  // Start the 15-second storage save interval
+  rationStorageInterval = setInterval(async () => {
+    await saveRationUsageToStorage();
+  }, 15000); // Every 15 seconds
+  
+  console.log('[LOCKD] Ration tracking started (1s tracking, 15s saves)');
+  
+  // Initialize tracking for current active tab
+  initializeActiveTab();
+}
+
+// Initialize tracking for whatever tab is currently active
+async function initializeActiveTab() {
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    if (tabs.length > 0 && tabs[0].id) {
+      await updateActiveRationTab(tabs[0].id);
+    }
+  } catch (e) {
+    console.error('[LOCKD] Error initializing active tab:', e);
+  }
+}
+
+// Handle tab activation
+async function handleTabActivated(activeInfo) {
+  await updateActiveRationTab(activeInfo.tabId);
+}
+
+// Handle tab URL changes
+async function handleTabUpdated(tabId, changeInfo, tab) {
+  // Update tracking when URL changes on active tab
+  if (changeInfo.url) {
+    // Check if this is the currently active tab
+    try {
+      const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
+      if (activeTabs.length > 0 && activeTabs[0].id === tabId) {
+        await updateActiveRationTab(tabId);
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+}
+
+// Handle window focus changes
+async function handleWindowFocusChanged(windowId) {
+  if (windowId === browser.windows.WINDOW_ID_NONE) {
+    // Browser lost focus, stop tracking
+    activeRationTab = null;
+    console.log('[LOCKD] Window unfocused, pausing ration tracking');
+    return;
+  }
+  
+  // Get active tab in focused window
+  try {
+    const tabs = await browser.tabs.query({ active: true, windowId });
+    if (tabs.length > 0) {
+      await updateActiveRationTab(tabs[0].id);
+    }
+  } catch (e) {
+    console.error('[LOCKD] Error getting active tab:', e);
+  }
+}
+
+// Update which rationed site is currently active
+async function updateActiveRationTab(tabId) {
+  await ensureInitialized();
+  
+  try {
+    const tab = await browser.tabs.get(tabId);
+    if (!tab.url) {
+      activeRationTab = null;
+      return;
+    }
+    
+    const url = new URL(tab.url);
+    const hostname = url.hostname.replace(/^www\./, '');
+    
+    const site = await getSiteConfig(hostname);
+    
+    if (site && site.ration && !site.blocked) {
+      // Check if has active pass (don't track ration if using a pass)
+      const hasPass = await hasActivePass(hostname);
+      if (!hasPass) {
+        activeRationTab = { tabId, domain: site.domain, hostname, url: tab.url };
+        console.log(`[LOCKD] Tracking ration: ${site.domain}`);
+        return;
+      }
+    }
+    
+    activeRationTab = null;
+  } catch (e) {
+    activeRationTab = null;
+  }
+}
+
+// Track ration time (called every 1 second)
+function trackRationTime() {
+  if (!activeRationTab) return;
+  if (!isInitialized) return;
+  if (isTrackingRationTime) return; // Prevent overlapping calls
+  
+  isTrackingRationTime = true;
+  const { tabId, domain, url } = activeRationTab;
+  
+  // Get site config from in-memory config cache
+  browser.storage.local.get(['config']).then(stored => {
+    const config = stored.config || DEFAULT_CONFIG;
+    
+    if (!config.enabled) {
+      isTrackingRationTime = false;
+      return;
+    }
+    
+    const site = config.sites.find(s => s.domain === domain);
+    if (!site || !site.ration) {
+      activeRationTab = null;
+      isTrackingRationTime = false;
+      return;
+    }
+    
+    // Increment usage in memory (1 second)
+    const usedSeconds = incrementRationUsageInMemory(domain, 1);
+    
+    // Update analytics
+    if (url) {
+      updateAnalytics(domain, url, 1);
+    }
+    const budgetSeconds = (site.rationMinutes || 5) * 60;
+    
+    // Check if budget exhausted
+    if (usedSeconds >= budgetSeconds) {
+      // Save to storage immediately when exhausted
+      saveRationUsageToStorage();
+      
+      // Don't redirect if overtime is active
+      if (hasActiveOvertime(domain)) {
+        isTrackingRationTime = false;
+        return;
+      }
+      
+      // Don't redirect again if we've already handled this exhaustion
+      if (rationExhaustedHandled[domain]) {
+        isTrackingRationTime = false;
+        return;
+      }
+      
+      console.log(`[LOCKD] Ration exhausted: ${domain}`);
+      activeRationTab = null;
+      rationExhaustedHandled[domain] = true;
+      
+      // Check if we should ask feelings
+      const askFeelings = site.askFeelings !== false;
+      
+      // Get the tab and redirect
+      browser.tabs.get(tabId).then(tab => {
+        if (tab && tab.url) {
+          if (askFeelings) {
+            // Show feelings screen first
+            redirectToBlocked(tabId, tab.url, site, 'feelings', {
+              passDuration: site.rationMinutes
+            });
+          } else {
+            // Go directly to ration-expired screen
+            redirectToBlocked(tabId, tab.url, site, 'ration-expired', {
+              rationMinutes: site.rationMinutes
+            });
+          }
+        }
+      }).catch(() => {
+        // Tab doesn't exist anymore
+      }).finally(() => {
+        isTrackingRationTime = false;
+      });
+      return;
+    }
+    
+    isTrackingRationTime = false;
+  }).catch(e => {
+    console.error('[LOCKD] Error in trackRationTime:', e);
+    isTrackingRationTime = false;
+  });
+}
+
+// Log a feeling after overtime expires
+async function logFeeling(domain, feeling, durationMinutes) {
+  feelingsLog.push({
+    domain,
+    feeling, // 'neutral' | 'positive' | 'negative'
+    timestamp: Date.now(),
+    durationMinutes
+  });
+  
+  // Keep only last 100 entries to prevent unbounded growth
+  if (feelingsLog.length > 100) {
+    feelingsLog = feelingsLog.slice(-100);
+  }
+  
+  // Record in analytics
+  recordFeelingInAnalytics(domain, feeling);
+  
+  await browser.storage.local.set({ feelingsLog });
+  await saveAnalyticsToStorage();
+  console.log(`[LOCKD] Feeling logged: ${domain} - ${feeling}`);
+}
+
+// Clean up expired overtime entries (only called at midnight to fully reset)
+function cleanExpiredOvertime() {
+  // Don't auto-delete expired overtime - we keep grantedMinutes for accumulation
+  // This function is now only used at midnight to fully clear everything
+}
+
+// Grant overtime for a rationed site
+async function grantOvertime(domain, minutes) {
+  await ensureInitialized();
+  
+  const existing = rationOvertime[domain];
+  let newExpiresAt;
+  let totalGrantedMinutes;
+  
+  if (existing && existing.expiresAt > Date.now()) {
+    // Add to existing active overtime
+    newExpiresAt = existing.expiresAt + (minutes * 60 * 1000);
+    totalGrantedMinutes = existing.grantedMinutes + minutes;
+    console.log(`[LOCKD] Overtime extended: ${domain} +${minutes}m (total: ${totalGrantedMinutes}m)`);
+  } else if (existing) {
+    // Previous overtime expired, but accumulate the total
+    newExpiresAt = Date.now() + (minutes * 60 * 1000);
+    totalGrantedMinutes = existing.grantedMinutes + minutes;
+    console.log(`[LOCKD] Overtime added: ${domain} +${minutes}m (total: ${totalGrantedMinutes}m)`);
+  } else {
+    // New overtime
+    newExpiresAt = Date.now() + (minutes * 60 * 1000);
+    totalGrantedMinutes = minutes;
+    console.log(`[LOCKD] Overtime granted: ${domain} for ${minutes} minutes`);
+  }
+  
+  rationOvertime[domain] = {
+    expiresAt: newExpiresAt,
+    grantedMinutes: totalGrantedMinutes
+  };
+  
+  // Clear the exhausted flag so feelings can be asked again when overtime expires
+  delete rationExhaustedHandled[domain];
+  
+  await browser.storage.local.set({ rationOvertime });
+  
+  // Update alarm for overtime expiry
+  browser.alarms.clear(`overtime-${domain}`);
+  browser.alarms.create(`overtime-${domain}`, {
+    when: newExpiresAt
+  });
+}
+
+// Check if a domain has active overtime
+function hasActiveOvertime(domain) {
+  cleanExpiredOvertime();
+  const overtime = rationOvertime[domain];
+  return overtime && overtime.expiresAt > Date.now();
+}
+
+// Get overtime status for a domain
+// Always returns grantedMinutes if any overtime was granted today
+function getOvertimeStatus(domain) {
+  const overtime = rationOvertime[domain];
+  if (!overtime) {
+    return null;
+  }
+  
+  const now = Date.now();
+  const isActive = overtime.expiresAt > now;
+  
+  if (isActive) {
+    const remainingMs = overtime.expiresAt - now;
+    return {
+      expiresAt: overtime.expiresAt,
+      grantedMinutes: overtime.grantedMinutes,
+      isActive: true,
+      remainingSeconds: Math.ceil(remainingMs / 1000),
+      remainingMinutes: Math.ceil(remainingMs / 60000)
+    };
+  } else {
+    // Overtime expired but we still return grantedMinutes for display
+    return {
+      expiresAt: overtime.expiresAt,
+      grantedMinutes: overtime.grantedMinutes,
+      isActive: false,
+      remainingSeconds: 0,
+      remainingMinutes: 0
+    };
   }
 }
 
@@ -142,14 +731,22 @@ async function grantPass(domain, type, durationMinutes) {
   console.log(`[LOCKD] Pass granted: ${domain} (${type}) for ${durationMinutes} minutes`);
 }
 
-function redirectToBlocked(tabId, originalUrl, siteConfig, mode) {
-  const blockedUrl = browser.runtime.getURL(
-    `blocked/blocked.html?` +
+function redirectToBlocked(tabId, originalUrl, siteConfig, mode, extraParams = {}) {
+  // Record block event in analytics
+  recordBlockEvent(siteConfig.domain);
+  saveAnalyticsToStorage();
+  
+  let url = `blocked/blocked.html?` +
     `url=${encodeURIComponent(originalUrl)}` +
     `&domain=${encodeURIComponent(siteConfig.domain)}` +
-    `&mode=${mode}`
-  );
+    `&mode=${mode}`;
   
+  // Add extra params (e.g., rationMinutes, passDuration)
+  for (const [key, value] of Object.entries(extraParams)) {
+    url += `&${key}=${encodeURIComponent(value)}`;
+  }
+  
+  const blockedUrl = browser.runtime.getURL(url);
   browser.tabs.update(tabId, { url: blockedUrl });
 }
 
@@ -176,6 +773,18 @@ async function checkTabsForExpiredPasses(expiredDomain) {
         const hasPass = await hasActivePass(hostname);
         if (site.domain === expiredDomain && !hasPass) {
           console.log(`[LOCKD] Pass expired, redirecting tab ${tab.id} from ${hostname}`);
+          
+          // For rationed sites with exhausted budget, show ration-expired
+          if (site.ration) {
+            const status = getRationStatus(site.domain, site);
+            if (status.isExhausted) {
+              redirectToBlocked(tab.id, tab.url, site, 'ration-expired', {
+                rationMinutes: site.rationMinutes
+              });
+              continue;
+            }
+          }
+          
           redirectToBlocked(tab.id, tab.url, site, 'choose');
         }
       } catch (e) {
@@ -184,6 +793,44 @@ async function checkTabsForExpiredPasses(expiredDomain) {
     }
   } catch (e) {
     console.error('[LOCKD] Error checking tabs:', e);
+  }
+}
+
+// Check tabs for feelings screen (after private pass expires on rationed site)
+async function checkTabsForFeelings(expiredDomain, passDuration) {
+  await ensureInitialized();
+  const stored = await browser.storage.local.get(['config']);
+  const config = stored.config || DEFAULT_CONFIG;
+  
+  if (!config.enabled) return;
+  
+  const site = config.sites.find(s => s.domain === expiredDomain);
+  if (!site) return;
+  
+  try {
+    const tabs = await browser.tabs.query({});
+    
+    for (const tab of tabs) {
+      if (!tab.url) continue;
+      
+      try {
+        const url = new URL(tab.url);
+        const hostname = url.hostname.replace(/^www\./, '');
+        
+        const tabSite = await getSiteConfig(hostname);
+        if (!tabSite || tabSite.domain !== expiredDomain) continue;
+        
+        console.log(`[LOCKD] Private pass expired on rationed site, showing feelings: ${hostname}`);
+        redirectToBlocked(tab.id, tab.url, site, 'feelings', {
+          rationMinutes: site.rationMinutes,
+          passDuration: passDuration
+        });
+      } catch (e) {
+        // Invalid URL, skip
+      }
+    }
+  } catch (e) {
+    console.error('[LOCKD] Error checking tabs for feelings:', e);
   }
 }
 
@@ -204,16 +851,42 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       const site = await getSiteConfig(hostname);
       if (!site) return;
       
+      // Completely blocked - no access ever
       if (site.blocked) {
         redirectToBlocked(details.tabId, details.url, site, 'blocked');
         return;
       }
       
+      // Has active pass - allow
       const hasPass = await hasActivePass(hostname);
       if (hasPass) {
         return;
       }
       
+      // Ration mode - check overtime and budget
+      if (site.ration) {
+        // Check for active overtime first
+        if (hasActiveOvertime(site.domain)) {
+          return; // Allow access during overtime
+        }
+        
+        const status = getRationStatus(site.domain, site);
+        
+        if (!status.isExhausted) {
+          // Budget remaining - allow access and start tracking immediately
+          // Set active ration tab directly for immediate tracking
+          activeRationTab = { tabId: details.tabId, domain: site.domain, hostname };
+          return;
+        }
+        
+        // Budget exhausted - show ration-expired screen
+        redirectToBlocked(details.tabId, details.url, site, 'ration-expired', {
+          rationMinutes: site.rationMinutes
+        });
+        return;
+      }
+      
+      // Standard pass mode - show choose screen
       redirectToBlocked(details.tabId, details.url, site, 'choose');
       
     } catch (e) {
@@ -243,16 +916,44 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       
       if (changeInfo.url.includes(browser.runtime.id)) return;
       
+      // Completely blocked - no access ever
       if (site.blocked) {
         redirectToBlocked(tabId, changeInfo.url, site, 'blocked');
         return;
       }
       
+      // Has active pass - allow
       const hasPass = await hasActivePass(hostname);
       if (hasPass) {
         return;
       }
       
+      // Ration mode - check overtime and budget
+      if (site.ration) {
+        // Check for active overtime first
+        if (hasActiveOvertime(site.domain)) {
+          console.log(`[LOCKD] Overtime active: ${site.domain}`);
+          return; // Allow access during overtime
+        }
+        
+        const status = getRationStatus(site.domain, site);
+        
+        if (!status.isExhausted) {
+          // Budget remaining - allow access and start tracking immediately
+          console.log(`[LOCKD] Ration access: ${site.domain} (${Math.floor(status.remainingSeconds / 60)}min ${status.remainingSeconds % 60}s left)`);
+          // Set active ration tab directly for immediate tracking
+          activeRationTab = { tabId, domain: site.domain, hostname };
+          return;
+        }
+        
+        // Budget exhausted - show ration-expired screen
+        redirectToBlocked(tabId, changeInfo.url, site, 'ration-expired', {
+          rationMinutes: site.rationMinutes
+        });
+        return;
+      }
+      
+      // Standard pass mode - show choose screen
       redirectToBlocked(tabId, changeInfo.url, site, 'choose');
       
     } catch (e) {
@@ -262,18 +963,109 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
 }
 
 browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'midnight-reset') {
+    console.log('[LOCKD] Midnight reset triggered');
+    cleanExpiredRationUsage();
+    rationExhaustedHandled = {}; // Reset exhausted flags for new day
+    rationOvertime = {}; // Clear all overtime for new day
+    browser.storage.local.set({ rationOvertime });
+    return;
+  }
+  
+  // Handle overtime expiry for ration mode
+  if (alarm.name.startsWith('overtime-')) {
+    const domain = alarm.name.replace('overtime-', '');
+    
+    await ensureInitialized();
+    
+    // Get overtime info - keep grantedMinutes for accumulation, just mark as expired
+    const overtime = rationOvertime[domain];
+    const grantedMinutes = overtime ? overtime.grantedMinutes : 0;
+    
+    // Get site config to check if askFeelings is enabled
+    const stored = await browser.storage.local.get(['config']);
+    const config = stored.config || DEFAULT_CONFIG;
+    const site = config.sites.find(s => s.domain === domain);
+    const askFeelings = site && site.askFeelings !== false; // Default to true
+    
+    console.log(`[LOCKD] Overtime expired: ${domain}, grantedMinutes: ${grantedMinutes}, askFeelings: ${askFeelings}`);
+    
+    // Mark overtime as expired but keep grantedMinutes for accumulation
+    if (overtime) {
+      rationOvertime[domain] = {
+        expiresAt: 0, // Mark as expired
+        grantedMinutes: grantedMinutes // Keep total for accumulation
+      };
+      await browser.storage.local.set({ rationOvertime });
+    }
+    
+    // Redirect tabs to feelings or ration-expired screen
+    if (askFeelings) {
+      await checkTabsForFeelings(domain, grantedMinutes);
+    } else {
+      await checkTabsForRationExpired(domain);
+    }
+    return;
+  }
+  
   if (alarm.name.startsWith('pass-')) {
     const domain = alarm.name.replace('pass-', '');
     
     await ensureInitialized();
+    
+    // Get pass info before deleting
+    const pass = activePasses[domain];
+    const passDuration = pass ? Math.round((pass.expiresAt - pass.grantedAt) / 60000) : 0;
+    
+    console.log(`[LOCKD] Pass expired: ${domain}, type: ${pass?.type}`);
+    
     delete activePasses[domain];
     await browser.storage.local.set({ passes: activePasses });
     
-    console.log(`[LOCKD] Pass expired: ${domain}`);
-    
+    // For pass mode sites, just redirect to choose screen
     await checkTabsForExpiredPasses(domain);
+    return;
   }
 });
+
+// Check tabs and redirect to ration-expired screen
+async function checkTabsForRationExpired(expiredDomain) {
+  await ensureInitialized();
+  const stored = await browser.storage.local.get(['config']);
+  const config = stored.config || DEFAULT_CONFIG;
+  
+  if (!config.enabled) return;
+  
+  const site = config.sites.find(s => s.domain === expiredDomain);
+  if (!site) return;
+  
+  try {
+    const tabs = await browser.tabs.query({});
+    
+    for (const tab of tabs) {
+      if (!tab.url) continue;
+      
+      try {
+        const url = new URL(tab.url);
+        const hostname = url.hostname.replace(/^www\./, '');
+        
+        const tabSite = await getSiteConfig(hostname);
+        if (!tabSite || tabSite.domain !== expiredDomain) continue;
+        
+        console.log(`[LOCKD] Overtime expired, showing ration-expired: ${hostname}`);
+        redirectToBlocked(tab.id, tab.url, site, 'ration-expired', {
+          rationMinutes: site.rationMinutes
+        });
+      } catch (e) {
+        // Invalid URL, skip
+      }
+    }
+  } catch (e) {
+    console.error('[LOCKD] Error checking tabs for ration-expired:', e);
+  }
+}
+
+
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender).then(sendResponse).catch(e => {
@@ -301,6 +1093,25 @@ async function handleMessage(message, sender) {
     case 'grantPass':
       await grantPass(message.domain, message.type, message.duration);
       return { success: true };
+    
+    case 'grantOvertime':
+      await grantOvertime(message.domain, message.minutes);
+      return { success: true };
+    
+    case 'getOvertimeStatus':
+      cleanExpiredOvertime();
+      if (message.domain) {
+        return getOvertimeStatus(message.domain);
+      }
+      // Return all overtime statuses
+      const allOvertime = {};
+      for (const domain in rationOvertime) {
+        const status = getOvertimeStatus(domain);
+        if (status) {
+          allOvertime[domain] = status;
+        }
+      }
+      return allOvertime;
     
     case 'getPass':
       cleanExpiredPasses();
@@ -332,6 +1143,164 @@ async function handleMessage(message, sender) {
     case 'getVersion':
       const manifest = browser.runtime.getManifest();
       return manifest.version;
+    
+    case 'getRationUsage':
+      cleanExpiredRationUsage();
+      if (message.domain) {
+        const site = await getSiteConfig(message.domain);
+        if (site && site.ration) {
+          return getRationStatus(site.domain, site);
+        }
+        return null;
+      }
+      // Return all ration usage
+      const allUsage = {};
+      const storedConfigForRation = await browser.storage.local.get(['config']);
+      const configForRation = storedConfigForRation.config || DEFAULT_CONFIG;
+      for (const site of configForRation.sites) {
+        if (site.ration) {
+          allUsage[site.domain] = getRationStatus(site.domain, site);
+        }
+      }
+      return allUsage;
+    
+    case 'logFeeling':
+      await logFeeling(message.domain, message.feeling, message.durationMinutes || 0);
+      return { success: true };
+    
+    case 'getFeelings':
+      if (message.domain) {
+        return feelingsLog.filter(f => f.domain === message.domain);
+      }
+      return [...feelingsLog];
+    
+    case 'getUsageStats':
+      // Get aggregated stats for popup/options
+      const stats = {
+        rationUsage: {},
+        overtime: {},
+        feelingsSummary: {}
+      };
+      
+      // Debug: log current in-memory state
+      console.log('[LOCKD] getUsageStats - rationUsage:', JSON.stringify(rationUsage));
+      console.log('[LOCKD] getUsageStats - rationOvertime:', JSON.stringify(rationOvertime));
+      
+      // Ration usage
+      const storedConfigForStats = await browser.storage.local.get(['config']);
+      const configForStats = storedConfigForStats.config || DEFAULT_CONFIG;
+      for (const site of configForStats.sites) {
+        if (site.ration) {
+          stats.rationUsage[site.domain] = {
+            ...getRationStatus(site.domain, site),
+            name: site.name
+          };
+          // Include overtime status if any overtime was granted today
+          const overtimeStatus = getOvertimeStatus(site.domain);
+          if (overtimeStatus) {
+            stats.overtime[site.domain] = {
+              ...overtimeStatus,
+              name: site.name
+            };
+          }
+        }
+      }
+      
+      // Feelings summary (last 7 days)
+      const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      const recentFeelings = feelingsLog.filter(f => f.timestamp > weekAgo);
+      
+      for (const feeling of recentFeelings) {
+        if (!stats.feelingsSummary[feeling.domain]) {
+          stats.feelingsSummary[feeling.domain] = { neutral: 0, positive: 0, negative: 0 };
+        }
+        stats.feelingsSummary[feeling.domain][feeling.feeling]++;
+      }
+      
+      return stats;
+    
+    case 'getAnalytics':
+      // Get analytics data for a date range
+      // message: { startDate?: string, endDate?: string }
+      const analyticsStartDate = message.startDate || null;
+      const analyticsEndDate = message.endDate || getTodayString();
+      
+      const filteredAnalytics = {};
+      for (const [date, data] of Object.entries(analyticsHistory)) {
+        if (analyticsStartDate && date < analyticsStartDate) continue;
+        if (analyticsEndDate && date > analyticsEndDate) continue;
+        filteredAnalytics[date] = data;
+      }
+      
+      return filteredAnalytics;
+    
+    case 'getAnalyticsSummary':
+      // Get aggregated analytics summary
+      // message: { days?: number } - defaults to 30
+      const summaryDays = message.days || 30;
+      const summaryEndDate = new Date();
+      const summaryStartDate = new Date();
+      summaryStartDate.setDate(summaryStartDate.getDate() - summaryDays);
+      
+      const summary = {
+        totalSeconds: 0,
+        byDomain: {},      // { [domain]: { totalSeconds, paths: {}, hourlyAvg: {} } }
+        byDate: {},        // { [date]: totalSeconds }
+        peakHours: {},     // { [hour]: totalSeconds }
+        feelings: { positive: 0, neutral: 0, negative: 0 },
+        totalBlocks: 0
+      };
+      
+      for (const [date, domains] of Object.entries(analyticsHistory)) {
+        const dateObj = new Date(date);
+        if (dateObj < summaryStartDate || dateObj > summaryEndDate) continue;
+        
+        summary.byDate[date] = 0;
+        
+        for (const [domain, data] of Object.entries(domains)) {
+          // Initialize domain summary
+          if (!summary.byDomain[domain]) {
+            summary.byDomain[domain] = {
+              totalSeconds: 0,
+              paths: {},
+              hours: {}
+            };
+          }
+          
+          // Aggregate totals
+          summary.totalSeconds += data.totalSeconds;
+          summary.byDate[date] += data.totalSeconds;
+          summary.byDomain[domain].totalSeconds += data.totalSeconds;
+          summary.totalBlocks += data.blocks || 0;
+          
+          // Aggregate paths
+          for (const [path, seconds] of Object.entries(data.paths || {})) {
+            summary.byDomain[domain].paths[path] = 
+              (summary.byDomain[domain].paths[path] || 0) + seconds;
+          }
+          
+          // Aggregate hourly data
+          for (const [hour, seconds] of Object.entries(data.hours || {})) {
+            summary.byDomain[domain].hours[hour] = 
+              (summary.byDomain[domain].hours[hour] || 0) + seconds;
+            summary.peakHours[hour] = (summary.peakHours[hour] || 0) + seconds;
+          }
+          
+          // Aggregate feelings
+          for (const feeling of (data.feelings || [])) {
+            if (summary.feelings[feeling] !== undefined) {
+              summary.feelings[feeling]++;
+            }
+          }
+        }
+      }
+      
+      return summary;
+    
+    case 'clearAnalytics':
+      analyticsHistory = {};
+      await browser.storage.local.set({ analyticsHistory });
+      return { success: true };
     
     default:
       return { error: 'Unknown action' };
