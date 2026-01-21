@@ -16,7 +16,8 @@
     "storage",
     "webNavigation",
     "alarms",
-    "tabs"
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -39,7 +40,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["blocked/blocked.html", "styles/common.css"],
+      "resources": ["blocked/blocked.html", "styles/common.css", "content/blocker.css"],
       "matches": ["<all_urls>"]
     }
   ],

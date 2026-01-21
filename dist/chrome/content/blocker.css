@@ -1,0 +1,299 @@
+/* LOCKD Blocker Overlay Styles */
+/* Using !important and inline-block isolation to override site styles */
+
+#lockd-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483647 !important; /* Max z-index */
+  background: #181818 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace !important;
+  color: #d8d8d8 !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#lockd-overlay * {
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+}
+
+#lockd-overlay .lockd-container {
+  text-align: center !important;
+  max-width: 480px !important;
+  padding: 40px !important;
+  background: #282828 !important;
+  border: 2px solid #585858 !important;
+}
+
+#lockd-overlay .lockd-logo {
+  font-size: 32px !important;
+  font-weight: bold !important;
+  letter-spacing: 4px !important;
+  margin-bottom: 8px !important;
+  color: #d8d8d8 !important;
+}
+
+#lockd-overlay .lockd-domain {
+  font-size: 14px !important;
+  color: #b8b8b8 !important;
+  margin-bottom: 32px !important;
+}
+
+#lockd-overlay .lockd-motivational {
+  font-size: 18px !important;
+  color: #a8a8a8 !important;
+  margin-bottom: 40px !important;
+  font-style: italic !important;
+}
+
+#lockd-overlay .lockd-buttons {
+  display: flex !important;
+  gap: 16px !important;
+  justify-content: center !important;
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-btn {
+  padding: 16px 32px !important;
+  font-size: 14px !important;
+  font-weight: bold !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  border: 2px solid !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  background: transparent !important;
+  font-family: inherit !important;
+  min-width: 140px !important;
+}
+
+#lockd-overlay .lockd-btn-work {
+  color: #a1b56c !important;
+  border-color: #a1b56c !important;
+}
+
+#lockd-overlay .lockd-btn-work:hover {
+  background: #a1b56c !important;
+  color: #181818 !important;
+}
+
+#lockd-overlay .lockd-btn-private {
+  color: #ba8baf !important;
+  border-color: #ba8baf !important;
+}
+
+#lockd-overlay .lockd-btn-private:hover {
+  background: #ba8baf !important;
+  color: #181818 !important;
+}
+
+#lockd-overlay .lockd-btn-overtime {
+  color: #f7ca88 !important;
+  border-color: #f7ca88 !important;
+}
+
+#lockd-overlay .lockd-btn-overtime:hover {
+  background: #f7ca88 !important;
+  color: #181818 !important;
+}
+
+#lockd-overlay .lockd-btn-confirm {
+  color: #7cafc2 !important;
+  border-color: #7cafc2 !important;
+}
+
+#lockd-overlay .lockd-btn-confirm:hover {
+  background: #7cafc2 !important;
+  color: #181818 !important;
+}
+
+#lockd-overlay .lockd-btn-back {
+  color: #585858 !important;
+  border-color: #585858 !important;
+}
+
+#lockd-overlay .lockd-btn-back:hover {
+  background: #585858 !important;
+  color: #181818 !important;
+}
+
+#lockd-overlay .lockd-btn.hidden {
+  display: none !important;
+}
+
+#lockd-overlay .lockd-notice {
+  font-size: 12px !important;
+  color: #585858 !important;
+  margin-bottom: 16px !important;
+}
+
+#lockd-overlay .lockd-notice.hidden {
+  display: none !important;
+}
+
+/* Waiting screen */
+#lockd-overlay .lockd-timer {
+  font-size: 72px !important;
+  font-weight: bold !important;
+  color: #ba8baf !important;
+  margin-bottom: 16px !important;
+}
+
+#lockd-overlay .lockd-waiting-text {
+  font-size: 14px !important;
+  color: #a8a8a8 !important;
+}
+
+/* Duration/Overtime slider */
+#lockd-overlay .lockd-slider-container {
+  margin: 24px 0 !important;
+}
+
+#lockd-overlay .lockd-slider-value {
+  font-size: 48px !important;
+  font-weight: bold !important;
+  margin-bottom: 16px !important;
+}
+
+#lockd-overlay .lockd-slider-value.private {
+  color: #ba8baf !important;
+}
+
+#lockd-overlay .lockd-slider-value.overtime {
+  color: #f7ca88 !important;
+}
+
+#lockd-overlay .lockd-slider-labels {
+  display: flex !important;
+  justify-content: space-between !important;
+  font-size: 12px !important;
+  color: #585858 !important;
+  margin-bottom: 8px !important;
+}
+
+#lockd-overlay .lockd-slider {
+  width: 100% !important;
+  height: 8px !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background: #383838 !important;
+  outline: none !important;
+  cursor: pointer !important;
+}
+
+#lockd-overlay .lockd-slider::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 20px !important;
+  height: 20px !important;
+  background: #d8d8d8 !important;
+  cursor: pointer !important;
+}
+
+#lockd-overlay .lockd-slider::-moz-range-thumb {
+  width: 20px !important;
+  height: 20px !important;
+  background: #d8d8d8 !important;
+  cursor: pointer !important;
+  border: none !important;
+}
+
+/* Ration expired screen */
+#lockd-overlay .lockd-ration-info {
+  font-size: 16px !important;
+  color: #ab4642 !important;
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-ration-info span {
+  font-weight: bold !important;
+}
+
+/* Preset buttons */
+#lockd-overlay .lockd-presets {
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: center !important;
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-preset-btn {
+  padding: 8px 16px !important;
+  font-size: 12px !important;
+  background: transparent !important;
+  border: 1px solid #383838 !important;
+  color: #a8a8a8 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  font-family: inherit !important;
+}
+
+#lockd-overlay .lockd-preset-btn:hover,
+#lockd-overlay .lockd-preset-btn.active {
+  border-color: #f7ca88 !important;
+  color: #f7ca88 !important;
+}
+
+/* Feelings screen */
+#lockd-overlay .lockd-feelings-question {
+  font-size: 18px !important;
+  margin-bottom: 32px !important;
+  color: #d8d8d8 !important;
+}
+
+#lockd-overlay .lockd-feelings-buttons {
+  display: flex !important;
+  gap: 16px !important;
+  justify-content: center !important;
+}
+
+#lockd-overlay .lockd-feeling-btn {
+  padding: 16px 24px !important;
+  font-size: 14px !important;
+  background: transparent !important;
+  border: 2px solid #585858 !important;
+  color: #a8a8a8 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  font-family: inherit !important;
+}
+
+#lockd-overlay .lockd-feeling-btn:hover {
+  border-color: #d8d8d8 !important;
+  color: #d8d8d8 !important;
+}
+
+#lockd-overlay .lockd-feelings-response {
+  font-size: 16px !important;
+  color: #a8a8a8 !important;
+  margin-bottom: 32px !important;
+  font-style: italic !important;
+}
+
+/* Blocked screen */
+#lockd-overlay .lockd-blocked-text {
+  font-size: 24px !important;
+  color: #ab4642 !important;
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-blocked-reason {
+  font-size: 14px !important;
+  color: #585858 !important;
+}
+
+/* Screen visibility */
+#lockd-overlay .lockd-screen {
+  display: none !important;
+}
+
+#lockd-overlay .lockd-screen.active {
+  display: block !important;
+}

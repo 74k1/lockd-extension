@@ -610,12 +610,12 @@ function trackRationTime() {
         if (tab && tab.url) {
           if (askFeelings) {
             // Show feelings screen first
-            redirectToBlocked(tabId, tab.url, site, 'feelings', {
+            showBlockOverlay(tabId, tab.url, site, 'feelings', {
               passDuration: site.rationMinutes
             });
           } else {
             // Go directly to ration-expired screen
-            redirectToBlocked(tabId, tab.url, site, 'ration-expired', {
+            showBlockOverlay(tabId, tab.url, site, 'ration-expired', {
               rationMinutes: site.rationMinutes
             });
           }
@@ -859,11 +859,48 @@ async function grantPass(domain, type, durationMinutes) {
   console.log(`[LOCKD] Pass granted: ${domain} (${type}) for ${durationMinutes} minutes`);
 }
 
-function redirectToBlocked(tabId, originalUrl, siteConfig, mode, extraParams = {}) {
+// Inject the blocker overlay into a tab
+async function showBlockOverlay(tabId, originalUrl, siteConfig, mode, extraParams = {}) {
   // Record block event in analytics
   recordBlockEvent(siteConfig.domain);
   saveAnalyticsToStorage();
   
+  // Get config for the overlay
+  const stored = await browser.storage.local.get(['config']);
+  const config = stored.config || DEFAULT_CONFIG;
+  
+  try {
+    // First, inject the CSS
+    await browser.scripting.insertCSS({
+      target: { tabId },
+      files: ['content/blocker.css']
+    });
+    
+    // Then inject the JS
+    await browser.scripting.executeScript({
+      target: { tabId },
+      files: ['content/blocker.js']
+    });
+    
+    // Send message to show overlay
+    await browser.tabs.sendMessage(tabId, {
+      action: 'showBlockOverlay',
+      mode: mode,
+      config: config,
+      siteConfig: siteConfig,
+      options: extraParams
+    });
+    
+    console.log(`[LOCKD] Overlay shown: ${siteConfig.domain} (${mode})`);
+  } catch (e) {
+    console.error('[LOCKD] Failed to inject overlay, falling back to redirect:', e);
+    // Fallback to redirect if injection fails (e.g., on extension pages)
+    redirectToBlockedPage(tabId, originalUrl, siteConfig, mode, extraParams);
+  }
+}
+
+// Fallback: redirect to blocked page (used when overlay injection fails)
+function redirectToBlockedPage(tabId, originalUrl, siteConfig, mode, extraParams = {}) {
   let url = `blocked/blocked.html?` +
     `url=${encodeURIComponent(originalUrl)}` +
     `&domain=${encodeURIComponent(siteConfig.domain)}` +
@@ -906,14 +943,14 @@ async function checkTabsForExpiredPasses(expiredDomain) {
           if (site.ration) {
             const status = getRationStatus(site.domain, site);
             if (status.isExhausted) {
-              redirectToBlocked(tab.id, tab.url, site, 'ration-expired', {
+              showBlockOverlay(tab.id, tab.url, site, 'ration-expired', {
                 rationMinutes: site.rationMinutes
               });
               continue;
             }
           }
           
-          redirectToBlocked(tab.id, tab.url, site, 'choose');
+          showBlockOverlay(tab.id, tab.url, site, 'choose');
         }
       } catch (e) {
         // Invalid URL, skip
@@ -943,7 +980,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       
       // Completely blocked - no access ever
       if (site.blocked) {
-        redirectToBlocked(details.tabId, details.url, site, 'blocked');
+        showBlockOverlay(details.tabId, details.url, site, 'blocked');
         return;
       }
       
@@ -964,14 +1001,14 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
         }
         
         // Budget exhausted - show ration-expired screen
-        redirectToBlocked(details.tabId, details.url, site, 'ration-expired', {
+        showBlockOverlay(details.tabId, details.url, site, 'ration-expired', {
           rationMinutes: site.rationMinutes
         });
         return;
       }
       
       // Standard pass mode - show choose screen
-      redirectToBlocked(details.tabId, details.url, site, 'choose');
+      showBlockOverlay(details.tabId, details.url, site, 'choose');
       
     } catch (e) {
       console.error('[LOCKD] Error:', e);
@@ -1002,7 +1039,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       
       // Completely blocked - no access ever
       if (site.blocked) {
-        redirectToBlocked(tabId, changeInfo.url, site, 'blocked');
+        showBlockOverlay(tabId, changeInfo.url, site, 'blocked');
         return;
       }
       
@@ -1024,14 +1061,14 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
         }
         
         // Budget exhausted - show ration-expired screen
-        redirectToBlocked(tabId, changeInfo.url, site, 'ration-expired', {
+        showBlockOverlay(tabId, changeInfo.url, site, 'ration-expired', {
           rationMinutes: site.rationMinutes
         });
         return;
       }
       
       // Standard pass mode - show choose screen
-      redirectToBlocked(tabId, changeInfo.url, site, 'choose');
+      showBlockOverlay(tabId, changeInfo.url, site, 'choose');
       
     } catch (e) {
       console.error('[LOCKD] Error:', e);
