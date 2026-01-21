@@ -583,18 +583,14 @@ function trackRationTime() {
     if (url) {
       updateAnalytics(domain, url, 1);
     }
-    const budgetSeconds = (site.rationMinutes || 5) * 60;
     
-    // Check if budget exhausted
-    if (usedSeconds >= budgetSeconds) {
+    // Get total budget including overtime
+    const status = getRationStatus(domain, site);
+    
+    // Check if total budget exhausted (base + overtime)
+    if (status.isExhausted) {
       // Save to storage immediately when exhausted
       saveRationUsageToStorage();
-      
-      // Don't redirect if overtime is active
-      if (hasActiveOvertime(domain)) {
-        isTrackingRationTime = false;
-        return;
-      }
       
       // Don't redirect again if we've already handled this exhaustion
       if (rationExhaustedHandled[domain]) {
@@ -602,7 +598,7 @@ function trackRationTime() {
         return;
       }
       
-      console.log(`[LOCKD] Ration exhausted: ${domain}`);
+      console.log(`[LOCKD] Ration exhausted: ${domain} (used ${usedSeconds}s of ${status.totalBudgetSeconds}s)`);
       activeRationTab = null;
       rationExhaustedHandled[domain] = true;
       
@@ -760,85 +756,36 @@ function cleanExpiredOvertime() {
   // This function is now only used at midnight to fully clear everything
 }
 
-// Grant overtime for a rationed site
+// Grant overtime for a rationed site (adds to daily budget, no timer)
 async function grantOvertime(domain, minutes) {
   await ensureInitialized();
   
   const existing = rationOvertime[domain];
-  let newExpiresAt;
-  let totalGrantedMinutes;
+  const totalGrantedMinutes = (existing?.grantedMinutes || 0) + minutes;
   
-  if (existing && existing.expiresAt > Date.now()) {
-    // Add to existing active overtime
-    newExpiresAt = existing.expiresAt + (minutes * 60 * 1000);
-    totalGrantedMinutes = existing.grantedMinutes + minutes;
-    console.log(`[LOCKD] Overtime extended: ${domain} +${minutes}m (total: ${totalGrantedMinutes}m)`);
-  } else if (existing) {
-    // Previous overtime expired, but accumulate the total
-    newExpiresAt = Date.now() + (minutes * 60 * 1000);
-    totalGrantedMinutes = existing.grantedMinutes + minutes;
-    console.log(`[LOCKD] Overtime added: ${domain} +${minutes}m (total: ${totalGrantedMinutes}m)`);
-  } else {
-    // New overtime
-    newExpiresAt = Date.now() + (minutes * 60 * 1000);
-    totalGrantedMinutes = minutes;
-    console.log(`[LOCKD] Overtime granted: ${domain} for ${minutes} minutes`);
-  }
+  console.log(`[LOCKD] Overtime added: ${domain} +${minutes}m (total budget now: base + ${totalGrantedMinutes}m overtime)`);
   
   rationOvertime[domain] = {
-    expiresAt: newExpiresAt,
     grantedMinutes: totalGrantedMinutes
   };
   
-  // Clear the exhausted flag so feelings can be asked again when overtime expires
+  // Clear the exhausted flag so user can continue using their budget
   delete rationExhaustedHandled[domain];
   
   await browser.storage.local.set({ rationOvertime });
-  
-  // Update alarm for overtime expiry
-  browser.alarms.clear(`overtime-${domain}`);
-  browser.alarms.create(`overtime-${domain}`, {
-    when: newExpiresAt
-  });
-}
-
-// Check if a domain has active overtime
-function hasActiveOvertime(domain) {
-  cleanExpiredOvertime();
-  const overtime = rationOvertime[domain];
-  return overtime && overtime.expiresAt > Date.now();
 }
 
 // Get overtime status for a domain
-// Always returns grantedMinutes if any overtime was granted today
+// Returns grantedMinutes if any overtime was granted today
 function getOvertimeStatus(domain) {
   const overtime = rationOvertime[domain];
-  if (!overtime) {
+  if (!overtime || !overtime.grantedMinutes) {
     return null;
   }
   
-  const now = Date.now();
-  const isActive = overtime.expiresAt > now;
-  
-  if (isActive) {
-    const remainingMs = overtime.expiresAt - now;
-    return {
-      expiresAt: overtime.expiresAt,
-      grantedMinutes: overtime.grantedMinutes,
-      isActive: true,
-      remainingSeconds: Math.ceil(remainingMs / 1000),
-      remainingMinutes: Math.ceil(remainingMs / 60000)
-    };
-  } else {
-    // Overtime expired but we still return grantedMinutes for display
-    return {
-      expiresAt: overtime.expiresAt,
-      grantedMinutes: overtime.grantedMinutes,
-      isActive: false,
-      remainingSeconds: 0,
-      remainingMinutes: 0
-    };
-  }
+  return {
+    grantedMinutes: overtime.grantedMinutes
+  };
 }
 
 function hostnameMatchesSite(hostname, site) {
@@ -977,44 +924,6 @@ async function checkTabsForExpiredPasses(expiredDomain) {
   }
 }
 
-// Check tabs for feelings screen (after private pass expires on rationed site)
-async function checkTabsForFeelings(expiredDomain, passDuration) {
-  await ensureInitialized();
-  const stored = await browser.storage.local.get(['config']);
-  const config = stored.config || DEFAULT_CONFIG;
-  
-  if (!config.enabled) return;
-  
-  const site = config.sites.find(s => s.domain === expiredDomain);
-  if (!site) return;
-  
-  try {
-    const tabs = await browser.tabs.query({});
-    
-    for (const tab of tabs) {
-      if (!tab.url) continue;
-      
-      try {
-        const url = new URL(tab.url);
-        const hostname = url.hostname.replace(/^www\./, '');
-        
-        const tabSite = await getSiteConfig(hostname);
-        if (!tabSite || tabSite.domain !== expiredDomain) continue;
-        
-        console.log(`[LOCKD] Private pass expired on rationed site, showing feelings: ${hostname}`);
-        redirectToBlocked(tab.id, tab.url, site, 'feelings', {
-          rationMinutes: site.rationMinutes,
-          passDuration: passDuration
-        });
-      } catch (e) {
-        // Invalid URL, skip
-      }
-    }
-  } catch (e) {
-    console.error('[LOCKD] Error checking tabs for feelings:', e);
-  }
-}
-
 if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
   browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
     if (details.frameId !== 0) return;
@@ -1044,18 +953,12 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
         return;
       }
       
-      // Ration mode - check overtime and budget
+      // Ration mode - check budget (includes base + overtime)
       if (site.ration) {
-        // Check for active overtime first
-        if (hasActiveOvertime(site.domain)) {
-          return; // Allow access during overtime
-        }
-        
         const status = getRationStatus(site.domain, site);
         
         if (!status.isExhausted) {
           // Budget remaining - allow access and start tracking immediately
-          // Set active ration tab directly for immediate tracking
           activeRationTab = { tabId: details.tabId, domain: site.domain, hostname };
           return;
         }
@@ -1109,20 +1012,13 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
         return;
       }
       
-      // Ration mode - check overtime and budget
+      // Ration mode - check budget (includes base + overtime)
       if (site.ration) {
-        // Check for active overtime first
-        if (hasActiveOvertime(site.domain)) {
-          console.log(`[LOCKD] Overtime active: ${site.domain}`);
-          return; // Allow access during overtime
-        }
-        
         const status = getRationStatus(site.domain, site);
         
         if (!status.isExhausted) {
           // Budget remaining - allow access and start tracking immediately
           console.log(`[LOCKD] Ration access: ${site.domain} (${Math.floor(status.remainingSeconds / 60)}min ${status.remainingSeconds % 60}s left)`);
-          // Set active ration tab directly for immediate tracking
           activeRationTab = { tabId, domain: site.domain, hostname };
           return;
         }
@@ -1153,42 +1049,6 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
   
-  // Handle overtime expiry for ration mode
-  if (alarm.name.startsWith('overtime-')) {
-    const domain = alarm.name.replace('overtime-', '');
-    
-    await ensureInitialized();
-    
-    // Get overtime info - keep grantedMinutes for accumulation, just mark as expired
-    const overtime = rationOvertime[domain];
-    const grantedMinutes = overtime ? overtime.grantedMinutes : 0;
-    
-    // Get site config to check if askFeelings is enabled
-    const stored = await browser.storage.local.get(['config']);
-    const config = stored.config || DEFAULT_CONFIG;
-    const site = config.sites.find(s => s.domain === domain);
-    const askFeelings = site && site.askFeelings !== false; // Default to true
-    
-    console.log(`[LOCKD] Overtime expired: ${domain}, grantedMinutes: ${grantedMinutes}, askFeelings: ${askFeelings}`);
-    
-    // Mark overtime as expired but keep grantedMinutes for accumulation
-    if (overtime) {
-      rationOvertime[domain] = {
-        expiresAt: 0, // Mark as expired
-        grantedMinutes: grantedMinutes // Keep total for accumulation
-      };
-      await browser.storage.local.set({ rationOvertime });
-    }
-    
-    // Redirect tabs to feelings or ration-expired screen
-    if (askFeelings) {
-      await checkTabsForFeelings(domain, grantedMinutes);
-    } else {
-      await checkTabsForRationExpired(domain);
-    }
-    return;
-  }
-  
   if (alarm.name.startsWith('pass-')) {
     const domain = alarm.name.replace('pass-', '');
     
@@ -1208,43 +1068,6 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 });
-
-// Check tabs and redirect to ration-expired screen
-async function checkTabsForRationExpired(expiredDomain) {
-  await ensureInitialized();
-  const stored = await browser.storage.local.get(['config']);
-  const config = stored.config || DEFAULT_CONFIG;
-  
-  if (!config.enabled) return;
-  
-  const site = config.sites.find(s => s.domain === expiredDomain);
-  if (!site) return;
-  
-  try {
-    const tabs = await browser.tabs.query({});
-    
-    for (const tab of tabs) {
-      if (!tab.url) continue;
-      
-      try {
-        const url = new URL(tab.url);
-        const hostname = url.hostname.replace(/^www\./, '');
-        
-        const tabSite = await getSiteConfig(hostname);
-        if (!tabSite || tabSite.domain !== expiredDomain) continue;
-        
-        console.log(`[LOCKD] Overtime expired, showing ration-expired: ${hostname}`);
-        redirectToBlocked(tab.id, tab.url, site, 'ration-expired', {
-          rationMinutes: site.rationMinutes
-        });
-      } catch (e) {
-        // Invalid URL, skip
-      }
-    }
-  } catch (e) {
-    console.error('[LOCKD] Error checking tabs for ration-expired:', e);
-  }
-}
 
 
 
