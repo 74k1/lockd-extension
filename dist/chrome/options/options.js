@@ -29,6 +29,7 @@ const btnCancel = document.getElementById('btn-cancel');
 const btnReset = document.getElementById('btn-reset');
 const btnAnalytics = document.getElementById('btn-analytics');
 const btnClearAnalytics = document.getElementById('btn-clear-analytics');
+const toggleTrackAll = document.getElementById('toggle-track-all');
 
 function createCheckIcon() {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -120,8 +121,8 @@ function getModeBadgeText(site) {
 }
 
 function getFaviconUrl(domain) {
-  // Use Google's favicon service
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+  // Use DuckDuckGo's favicon service for privacy
+  return `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`;
 }
 
 function renderSites() {
@@ -448,6 +449,13 @@ function renderSettings() {
   extraTimeMin.value = config.extraTimeMin || 1;
   extraTimeDefault.value = config.extraTimeDefault || 5;
   extraTimeMax.value = config.extraTimeMax || 60;
+  
+  // Analytics toggle
+  if (config.trackAllBrowsing) {
+    toggleTrackAll.classList.add('active');
+  } else {
+    toggleTrackAll.classList.remove('active');
+  }
 }
 
 function markChanged() {
@@ -615,7 +623,7 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 btnAnalytics.addEventListener('click', () => {
-  browser.tabs.create({ url: browser.runtime.getURL('analytics/analytics.html') });
+  window.location.href = browser.runtime.getURL('analytics/analytics.html');
 });
 
 btnClearAnalytics.addEventListener('click', async () => {
@@ -623,6 +631,12 @@ btnClearAnalytics.addEventListener('click', async () => {
   
   await browser.runtime.sendMessage({ action: 'clearAnalytics' });
   showToast('Analytics data cleared');
+});
+
+toggleTrackAll.addEventListener('click', () => {
+  config.trackAllBrowsing = !config.trackAllBrowsing;
+  renderSettings();
+  markChanged();
 });
 
 init();

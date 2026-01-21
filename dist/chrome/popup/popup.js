@@ -4,10 +4,16 @@ const statusEl = document.getElementById('status');
 const toggleEl = document.getElementById('toggle-enabled');
 const passesListEl = document.getElementById('passes-list');
 const rationListEl = document.getElementById('ration-list');
-const rationSection = document.getElementById('ration-section');
 const btnRevokeAll = document.getElementById('btn-revoke-all');
 const btnSettings = document.getElementById('btn-settings');
+const btnAnalytics = document.getElementById('btn-analytics');
 const versionEl = document.getElementById('version');
+const rationCountEl = document.getElementById('ration-count');
+const passCountEl = document.getElementById('pass-count');
+
+// Tab elements
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.tab-panel');
 
 let config = null;
 
@@ -44,6 +50,25 @@ function updateStatus() {
   }
 }
 
+// Tab switching
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    const targetTab = tab.dataset.tab;
+    
+    // Update tab buttons
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    // Update panels
+    panels.forEach(panel => {
+      panel.classList.remove('active');
+      if (panel.id === `panel-${targetTab}`) {
+        panel.classList.add('active');
+      }
+    });
+  });
+});
+
 async function loadPasses() {
   try {
     const passes = await browser.runtime.sendMessage({ action: 'getAllPasses' });
@@ -52,26 +77,29 @@ async function loadPasses() {
       passesListEl.removeChild(passesListEl.firstChild);
     }
     
-    if (!passes || Object.keys(passes).length === 0) {
-      const noPassesEl = document.createElement('div');
-      noPassesEl.className = 'no-passes';
-      noPassesEl.textContent = 'No active passes';
-      passesListEl.appendChild(noPassesEl);
+    const passEntries = passes ? Object.entries(passes) : [];
+    passCountEl.textContent = passEntries.length;
+    
+    if (passEntries.length === 0) {
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'empty-state';
+      emptyEl.textContent = 'No active passes';
+      passesListEl.appendChild(emptyEl);
       return;
     }
     
-    for (const [domain, pass] of Object.entries(passes)) {
+    for (const [domain, pass] of passEntries) {
       const remaining = Math.max(0, Math.ceil((pass.expiresAt - Date.now()) / 60000));
       
       const item = document.createElement('div');
-      item.className = 'pass-item';
+      item.className = 'list-item';
       
       const domainEl = document.createElement('div');
-      domainEl.className = 'pass-domain';
+      domainEl.className = 'item-domain';
       domainEl.textContent = domain;
       
       const infoEl = document.createElement('div');
-      infoEl.className = 'pass-info';
+      infoEl.className = 'item-info';
       
       const tagEl = document.createElement('span');
       tagEl.className = `tag ${pass.type}`;
@@ -140,12 +168,15 @@ async function loadRationStatus() {
     const overtime = stats.overtime || {};
     const domains = Object.keys(rationUsage);
     
+    rationCountEl.textContent = domains.length;
+    
     if (domains.length === 0) {
-      rationSection.style.display = 'none';
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'empty-state';
+      emptyEl.textContent = 'No rationed sites configured';
+      rationListEl.appendChild(emptyEl);
       return;
     }
-    
-    rationSection.style.display = 'block';
     
     for (const domain of domains) {
       const usage = rationUsage[domain];
@@ -172,7 +203,7 @@ async function loadRationStatus() {
         : 100;
       
       const item = document.createElement('div');
-      item.className = 'ration-item';
+      item.className = 'list-item';
       
       // Build tooltip with detailed info
       const tooltipLines = [
@@ -190,11 +221,11 @@ async function loadRationStatus() {
       item.title = tooltipLines.join('\n');
       
       const domainEl = document.createElement('div');
-      domainEl.className = 'ration-domain';
+      domainEl.className = 'item-domain';
       domainEl.textContent = usage.name || domain;
       
       const infoEl = document.createElement('div');
-      infoEl.className = 'ration-info';
+      infoEl.className = 'item-info';
       
       const usageEl = document.createElement('span');
       usageEl.className = 'ration-usage';
@@ -253,7 +284,6 @@ async function loadRationStatus() {
     }
   } catch (e) {
     console.error('[LOCKD] Load ration status error:', e);
-    rationSection.style.display = 'none';
   }
 }
 
@@ -269,7 +299,6 @@ btnRevokeAll.addEventListener('click', async () => {
   loadPasses();
 });
 
-const btnAnalytics = document.getElementById('btn-analytics');
 btnAnalytics.addEventListener('click', () => {
   browser.tabs.create({ url: browser.runtime.getURL('analytics/analytics.html') });
 });

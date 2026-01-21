@@ -16,6 +16,7 @@ _copy target:
     cp -r popup dist/{{target}}/
     cp -r blocked dist/{{target}}/
     cp -r options dist/{{target}}/
+    cp -r analytics dist/{{target}}/
     cp -r styles dist/{{target}}/
     cp -r icons dist/{{target}}/
 
