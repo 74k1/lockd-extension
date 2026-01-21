@@ -63,15 +63,38 @@
 
     /* Sites list */
     .site-item {
-      display: flex;
-      align-items: center;
-      padding: 12px 0;
+      padding: 16px 0;
       border-bottom: 1px solid var(--base02);
-      gap: 12px;
     }
 
     .site-item:last-child {
       border-bottom: none;
+    }
+
+    .site-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .site-header:hover .site-domain {
+      color: var(--base07);
+    }
+
+    .site-favicon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      background-color: var(--base02);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .site-favicon img {
+      width: 16px;
+      height: 16px;
     }
 
     .site-info {
@@ -89,6 +112,150 @@
       color: var(--base04);
       font-size: 12px;
       margin-top: 2px;
+    }
+
+    .site-mode-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 4px 8px;
+      flex-shrink: 0;
+    }
+
+    .site-mode-badge.pass {
+      background-color: var(--base02);
+      color: var(--base0D);
+    }
+
+    .site-mode-badge.ration {
+      background-color: var(--base02);
+      color: var(--base0E);
+    }
+
+    .site-mode-badge.block {
+      background-color: var(--base02);
+      color: var(--base08);
+    }
+
+    .site-expand {
+      color: var(--base04);
+      font-size: 12px;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+
+    .site-item.expanded .site-expand {
+      transform: rotate(180deg);
+    }
+
+    .site-details {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      background-color: var(--base00);
+      border: 1px solid var(--base02);
+    }
+
+    .site-item.expanded .site-details {
+      display: block;
+    }
+
+    .site-detail-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .site-detail-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .site-detail-label {
+      font-size: 12px;
+      color: var(--base04);
+    }
+
+    /* Segmented control */
+    .segmented-control {
+      display: flex;
+      border: 1px solid var(--base03);
+    }
+
+    .segment {
+      padding: 8px 16px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      background-color: var(--base01);
+      color: var(--base04);
+      border: none;
+      cursor: pointer;
+      border-right: 1px solid var(--base03);
+      font-family: inherit;
+    }
+
+    .segment:last-child {
+      border-right: none;
+    }
+
+    .segment:hover {
+      background-color: var(--base02);
+    }
+
+    .segment.active {
+      background-color: var(--base0D);
+      color: var(--base00);
+    }
+
+    .segment.active.ration {
+      background-color: var(--base0E);
+    }
+
+    .segment.active.block {
+      background-color: var(--base08);
+    }
+
+    /* Ration settings (conditional) */
+    .ration-settings {
+      display: none;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--base02);
+    }
+
+    .ration-settings.visible {
+      display: block;
+    }
+
+    .ration-budget {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .ration-budget input {
+      width: 60px;
+      text-align: center;
+    }
+
+    .ration-budget span {
+      font-size: 12px;
+      color: var(--base04);
+    }
+
+    .after-ration {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .after-ration-label {
+      font-size: 11px;
+      color: var(--base04);
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
 
     .site-match {
@@ -191,7 +358,7 @@
     }
 
     .add-site-form select {
-      width: 110px;
+      width: 130px;
     }
 
     /* Match mode help */
@@ -368,6 +535,20 @@
       font-size: 11px;
     }
 
+    .footer a {
+      color: var(--base04);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      color: var(--base06);
+      text-decoration: underline;
+    }
+
+    .footer-links {
+      margin-top: 8px;
+    }
+
     .footer-space {
       height: 100px;
     }
@@ -383,7 +564,7 @@
     <!-- Sites Section -->
     <div class="section">
       <div class="section-header">
-        <span class="section-title">Blocked Sites</span>
+        <span class="section-title">Managed Sites</span>
       </div>
       <div class="section-content">
         <div id="sites-list"></div>
@@ -413,8 +594,8 @@
       <div class="section-content">
         <div class="setting-row">
           <div class="setting-info">
-            <div class="setting-label">Work Duration</div>
-            <div class="setting-desc">How long work passes last</div>
+            <div class="setting-label">Work pass lasts</div>
+            <div class="setting-desc">Time you get when choosing work</div>
           </div>
           <div class="setting-input">
             <input type="number" id="work-duration" min="5" max="480" value="60">
@@ -423,8 +604,8 @@
         </div>
         <div class="setting-row">
           <div class="setting-info">
-            <div class="setting-label">Private Delay</div>
-            <div class="setting-desc">Waiting time before private access</div>
+            <div class="setting-label">Wait before private</div>
+            <div class="setting-desc">Seconds to reconsider before private access</div>
           </div>
           <div class="setting-input">
             <input type="number" id="private-delay" min="5" max="120" value="15">
@@ -433,8 +614,8 @@
         </div>
         <div class="setting-row">
           <div class="setting-info">
-            <div class="setting-label">Private Duration Range</div>
-            <div class="setting-desc">Min, default, and max for the slider</div>
+            <div class="setting-label">Private pass options</div>
+            <div class="setting-desc">How long you can request for private access</div>
           </div>
           <div class="range-group">
             <div class="range-field">
@@ -454,6 +635,45 @@
             <span class="range-unit">min</span>
           </div>
         </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Extra time options</div>
+            <div class="setting-desc">How long you can add when ration expires (overtime)</div>
+          </div>
+          <div class="range-group">
+            <div class="range-field">
+              <label>Min</label>
+              <input type="number" id="extra-time-min" min="1" max="120" value="1">
+            </div>
+            <span class="range-separator">/</span>
+            <div class="range-field">
+              <label>Default</label>
+              <input type="number" id="extra-time-default" min="1" max="120" value="5">
+            </div>
+            <span class="range-separator">/</span>
+            <div class="range-field">
+              <label>Max</label>
+              <input type="number" id="extra-time-max" min="1" max="120" value="60">
+            </div>
+            <span class="range-unit">min</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Analytics</span>
+      </div>
+      <div class="section-content">
+        <div class="setting-row" style="border-bottom: none;">
+          <div class="setting-info">
+            <div class="setting-label">Usage Analytics</div>
+            <div class="setting-desc">View detailed stats about your browsing habits</div>
+          </div>
+          <button class="primary" id="btn-analytics">View Analytics</button>
+        </div>
       </div>
     </div>
 
@@ -463,12 +683,28 @@
         <span class="section-title">Danger Zone</span>
       </div>
       <div class="section-content">
-        <button class="danger" id="btn-reset">Reset to Defaults</button>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Reset Settings</div>
+            <div class="setting-desc">Reset all sites and timing settings to defaults</div>
+          </div>
+          <button class="danger" id="btn-reset">Reset to Defaults</button>
+        </div>
+        <div class="setting-row" style="border-bottom: none;">
+          <div class="setting-info">
+            <div class="setting-label">Clear Analytics</div>
+            <div class="setting-desc">Permanently delete all usage history and statistics</div>
+          </div>
+          <button class="danger" id="btn-clear-analytics">Clear Analytics Data</button>
+        </div>
       </div>
     </div>
 
     <div class="footer">
       <span id="version"></span>
+      <div class="footer-links">
+        <a href="https://github.com/74k1/lockd-extension" target="_blank">src</a>
+      </div>
     </div>
 
     <div class="footer-space"></div>
