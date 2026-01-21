@@ -4,7 +4,13 @@ This guide provides essential information for agentic coding agents working on t
 
 ## Project Overview
 
-LOCKD is a no-bullshit social media blocker for Chrome and Firefox that intercepts navigation to distracting websites and forces users to choose between "work" and "private" access modes. The extension is built with vanilla JavaScript and follows a minimalist, brutalist design philosophy.
+LOCKD is a no-bullshit social media blocker for Chrome and Firefox that intercepts navigation to distracting websites and forces users to choose between "work" and "private" access modes. The extension features:
+
+- **Passes**: Temporary access grants with configurable durations (work/private modes)
+- **Rations**: Daily time budgets per site with overtime warnings and "feelings" tracking
+- **Analytics**: Usage statistics with heatmaps, daily trends, and top sites visualization
+
+The extension is built with vanilla JavaScript and follows a minimalist, brutalist design philosophy.
 
 ## Build Commands
 
@@ -69,17 +75,20 @@ This project currently has no automated test suite. Manual testing involves:
 ```
 /
 ├── background.js          # Service worker/background script
-├── popup/                 # Extension popup
+├── popup/                 # Extension popup (tabbed: Rations & Passes)
 │   ├── popup.html
 │   └── popup.js
 ├── options/              # Settings page
 │   ├── options.html
 │   └── options.js
-├── blocked/              # Interstitial page
+├── blocked/              # Interstitial page (pass granting, overtime mode)
 │   ├── blocked.html
 │   └── blocked.js
+├── analytics/            # Usage analytics dashboard
+│   ├── analytics.html
+│   └── analytics.js
 ├── styles/
-│   └── common.css        # Shared styles
+│   └── common.css        # Shared styles (base16 color scheme)
 ├── icons/                # Extension icons
 ├── manifest.json         # Firefox manifest
 ├── manifest.chrome.json  # Chrome manifest
@@ -182,4 +191,16 @@ This project currently has no automated test suite. Manual testing involves:
 - **Brutalist Design**: Sharp corners, monospace fonts, high contrast
 - **Minimal Dependencies**: Zero external dependencies
 - **Cross-Browser**: Works identically in Firefox and Chrome
-- **Privacy-First**: No analytics, no tracking, no data collection
+- **Privacy-First**: All data stays local, no external analytics or tracking
+
+## Debug Tools
+
+The analytics page includes debug utilities accessible via the browser console:
+
+```javascript
+// Generate mock analytics data (useful for testing/screenshots)
+LOCKD_DEBUG.generateMockData(360)  // Generate 360 days of mock data
+
+// Clear all analytics data
+LOCKD_DEBUG.clearMockData()
+```
