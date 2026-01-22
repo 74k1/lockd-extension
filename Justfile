@@ -19,6 +19,7 @@ _copy target:
     cp -r analytics dist/{{target}}/
     cp -r styles dist/{{target}}/
     cp -r icons dist/{{target}}/
+    cp -r content dist/{{target}}/
 
 # Build Firefox extension
 build-firefox: setup

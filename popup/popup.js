@@ -185,10 +185,9 @@ async function loadRationStatus() {
       const usedMinutes = Math.floor(usedSeconds / 60);
       const budgetMinutes = Math.floor(budgetSeconds / 60);
       
-      // Get overtime info (now includes expired overtime with grantedMinutes)
+      // Get overtime info
       const domainOvertime = overtime[domain];
       const overtimeMinutes = domainOvertime ? domainOvertime.grantedMinutes : 0;
-      const overtimeIsActive = domainOvertime ? domainOvertime.isActive : false;
       
       // Calculate display values - use total budget including all overtime granted today
       const totalBudgetMinutes = budgetMinutes + overtimeMinutes;
@@ -212,10 +211,6 @@ async function loadRationStatus() {
       ];
       if (overtimeMinutes > 0) {
         tooltipLines.push(`Overtime: +${overtimeMinutes}m`);
-        if (overtimeIsActive) {
-          const overtimeRemaining = Math.max(0, Math.ceil((domainOvertime.expiresAt - Date.now()) / 60000));
-          tooltipLines.push(`Active: ${overtimeRemaining}m remaining`);
-        }
       }
       tooltipLines.push(`${percentage.toFixed(1)}% used`);
       item.title = tooltipLines.join('\n');

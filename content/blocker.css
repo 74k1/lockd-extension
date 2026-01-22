@@ -1,0 +1,314 @@
+/* LOCKD Blocker Overlay Styles */
+/* Using !important and inline-block isolation to override site styles */
+/* Color scheme from common.css (base16) */
+
+#lockd-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483647 !important; /* Max z-index */
+  background: rgba(7, 6, 11, 0.85) !important; /* --base00 with transparency */
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-family: monospace !important;
+  color: #BFBDCA !important; /* --base05 */
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#lockd-overlay * {
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+}
+
+#lockd-overlay .lockd-container {
+  text-align: center !important;
+  max-width: 480px !important;
+  padding: 40px !important;
+  background: rgba(28, 27, 40, 0.95) !important; /* --base01 with slight transparency */
+  border: 2px solid #323246 !important; /* --base02 */
+}
+
+#lockd-overlay .lockd-logo {
+  font-size: 32px !important;
+  font-weight: bold !important;
+  letter-spacing: 4px !important;
+  margin-bottom: 8px !important;
+  color: #FFFFFF !important; /* --base07 */
+}
+
+#lockd-overlay .lockd-domain {
+  font-size: 14px !important;
+  color: #72708E !important; /* --base04 */
+  margin-bottom: 32px !important;
+}
+
+#lockd-overlay .lockd-motivational {
+  font-size: 18px !important;
+  color: #72708E !important; /* --base04 */
+  margin-bottom: 40px !important;
+  font-style: italic !important;
+}
+
+#lockd-overlay .lockd-buttons {
+  display: flex !important;
+  gap: 16px !important;
+  justify-content: center !important;
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-btn {
+  padding: 16px 32px !important;
+  font-size: 14px !important;
+  font-weight: bold !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  border: 2px solid !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  background: transparent !important;
+  font-family: inherit !important;
+  min-width: 140px !important;
+}
+
+#lockd-overlay .lockd-btn-work {
+  color: #54FF80 !important; /* --base0B */
+  border-color: #54FF80 !important;
+}
+
+#lockd-overlay .lockd-btn-work:hover {
+  background: #54FF80 !important;
+  color: #07060B !important; /* --base00 */
+}
+
+#lockd-overlay .lockd-btn-private {
+  color: #AB72FF !important; /* --base0E */
+  border-color: #AB72FF !important;
+}
+
+#lockd-overlay .lockd-btn-private:hover {
+  background: #AB72FF !important;
+  color: #07060B !important;
+}
+
+#lockd-overlay .lockd-btn-overtime {
+  color: #FFE15A !important; /* --base0A */
+  border-color: #FFE15A !important;
+}
+
+#lockd-overlay .lockd-btn-overtime:hover {
+  background: #FFE15A !important;
+  color: #07060B !important;
+}
+
+#lockd-overlay .lockd-btn-confirm {
+  color: #7089FF !important; /* --base0D */
+  border-color: #7089FF !important;
+}
+
+#lockd-overlay .lockd-btn-confirm:hover {
+  background: #7089FF !important;
+  color: #07060B !important;
+}
+
+#lockd-overlay .lockd-btn-back {
+  color: #4C4B69 !important; /* --base03 */
+  border-color: #4C4B69 !important;
+}
+
+#lockd-overlay .lockd-btn-back:hover {
+  background: #4C4B69 !important;
+  color: #07060B !important;
+}
+
+#lockd-overlay .lockd-btn.hidden {
+  display: none !important;
+}
+
+#lockd-overlay .lockd-notice {
+  font-size: 12px !important;
+  color: #4C4B69 !important; /* --base03 */
+  margin-bottom: 16px !important;
+}
+
+#lockd-overlay .lockd-notice.hidden {
+  display: none !important;
+}
+
+/* Waiting screen */
+#lockd-overlay .lockd-timer {
+  font-size: 72px !important;
+  font-weight: bold !important;
+  color: #AB72FF !important; /* --base0E */
+  margin-bottom: 16px !important;
+}
+
+#lockd-overlay .lockd-waiting-text {
+  font-size: 14px !important;
+  color: #72708E !important; /* --base04 */
+}
+
+/* Duration/Overtime slider */
+#lockd-overlay .lockd-slider-container {
+  margin: 24px 0 !important;
+}
+
+#lockd-overlay .lockd-slider-value {
+  font-size: 48px !important;
+  font-weight: bold !important;
+  margin-bottom: 16px !important;
+}
+
+#lockd-overlay .lockd-slider-value.private {
+  color: #AB72FF !important; /* --base0E */
+}
+
+#lockd-overlay .lockd-slider-value.overtime {
+  color: #FFE15A !important; /* --base0A */
+}
+
+#lockd-overlay .lockd-slider-labels {
+  display: flex !important;
+  justify-content: space-between !important;
+  font-size: 12px !important;
+  color: #4C4B69 !important; /* --base03 */
+  margin-bottom: 8px !important;
+}
+
+#lockd-overlay .lockd-slider {
+  width: 100% !important;
+  height: 8px !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background: #323246 !important; /* --base02 */
+  outline: none !important;
+  cursor: pointer !important;
+}
+
+#lockd-overlay .lockd-slider::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 20px !important;
+  height: 20px !important;
+  background: #EBE9F1 !important; /* --base06 */
+  cursor: pointer !important;
+  border-radius: 0 !important;
+}
+
+#lockd-overlay .lockd-slider::-moz-range-thumb {
+  width: 20px !important;
+  height: 20px !important;
+  background: #EBE9F1 !important; /* --base06 */
+  cursor: pointer !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Ration expired screen */
+#lockd-overlay .lockd-ration-info {
+  font-size: 16px !important;
+  color: #FF4B72 !important; /* --base08 */
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-ration-info span {
+  font-weight: bold !important;
+}
+
+/* Preset buttons */
+#lockd-overlay .lockd-presets {
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: center !important;
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-preset-btn {
+  padding: 8px 16px !important;
+  font-size: 12px !important;
+  background: transparent !important;
+  border: 1px solid #323246 !important; /* --base02 */
+  color: #72708E !important; /* --base04 */
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  font-family: inherit !important;
+}
+
+#lockd-overlay .lockd-preset-btn:hover,
+#lockd-overlay .lockd-preset-btn.active {
+  border-color: #FFE15A !important; /* --base0A */
+  color: #FFE15A !important;
+}
+
+/* Feelings screen */
+#lockd-overlay .lockd-feelings-question {
+  font-size: 18px !important;
+  margin-bottom: 32px !important;
+  color: #EBE9F1 !important; /* --base06 */
+}
+
+#lockd-overlay .lockd-feelings-buttons {
+  display: flex !important;
+  gap: 16px !important;
+  justify-content: center !important;
+}
+
+#lockd-overlay .lockd-feeling-btn {
+  padding: 16px 24px !important;
+  font-size: 14px !important;
+  background: transparent !important;
+  border: 2px solid #4C4B69 !important; /* --base03 */
+  color: #72708E !important; /* --base04 */
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  font-family: inherit !important;
+}
+
+#lockd-overlay .lockd-feeling-btn[data-feeling="positive"]:hover {
+  border-color: #54FF80 !important; /* --base0B green */
+  color: #54FF80 !important;
+}
+
+#lockd-overlay .lockd-feeling-btn[data-feeling="neutral"]:hover {
+  border-color: #72708E !important; /* --base04 gray */
+  color: #BFBDCA !important; /* --base05 */
+}
+
+#lockd-overlay .lockd-feeling-btn[data-feeling="negative"]:hover {
+  border-color: #FF4B72 !important; /* --base08 red */
+  color: #FF4B72 !important;
+}
+
+#lockd-overlay .lockd-feelings-response {
+  font-size: 16px !important;
+  color: #72708E !important; /* --base04 */
+  margin-bottom: 32px !important;
+  font-style: italic !important;
+}
+
+/* Blocked screen */
+#lockd-overlay .lockd-blocked-text {
+  font-size: 24px !important;
+  color: #FF4B72 !important; /* --base08 */
+  margin-bottom: 24px !important;
+}
+
+#lockd-overlay .lockd-blocked-reason {
+  font-size: 14px !important;
+  color: #4C4B69 !important; /* --base03 */
+}
+
+/* Screen visibility */
+#lockd-overlay .lockd-screen {
+  display: none !important;
+}
+
+#lockd-overlay .lockd-screen.active {
+  display: block !important;
+}
