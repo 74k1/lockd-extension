@@ -5,7 +5,7 @@ const DEFAULT_SITES = [
   { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
   { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
   { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: true },
   { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact', ration: true, rationMinutes: 30, askFeelings: true },
   { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 3, askFeelings: true },
   { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
