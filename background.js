@@ -1,17 +1,17 @@
 const browser = globalThis.browser || globalThis.chrome;
 
 const DEFAULT_SITES = [
-  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: true },
-  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: true },
-  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: true },
-  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact', ration: true, rationMinutes: 30, askFeelings: true },
-  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 3, askFeelings: true },
-  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base', ration: true, rationMinutes: 5, askFeelings: true },
-  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
+  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
+  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
+  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact', ration: true, rationMinutes: 30, askFeelings: false },
+  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 3, askFeelings: false },
+  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base', ration: true, rationMinutes: 5, askFeelings: false },
+  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
 ];
 
 const DEFAULT_CONFIG = {
