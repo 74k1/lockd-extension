@@ -13,15 +13,25 @@ LOCKD intercepts navigation to distracting websites and asks you why you're ther
 - Separate work and private access modes
 - Work mode: instant access (I trust you. Probably shouldn't.)
 - Private mode: forced delay + guilt trip
+- **Rations**: daily time budgets per site. When it's gone, it's gone. (Until you add overtime like a hypocrite.)
+- **Overtime**: because willpower is a myth
+- **Feelings check**: after your ration expires, asks how you feel. Worth it? Meh? Regret? Be honest.
+- **Analytics**: heatmaps, daily trends, peak hours, top sites. For masochists who want receipts.
 - Domain matching: base domain, exact, or regex
 - Auto-kick when your pass expires (yes, mid-scroll)
+- Pauses videos when blocked (yes, even YouTube Shorts)
 - No accounts, no data collection, no rounded corners, no sympathy
 
 ## Screenshots
 
-| ![locked](/.github/assets/lockd_locked.png) | ![blocked](/.github/assets/lockd_blocked.png) |
-| --- | --- |
-| ![settings](/.github/assets/lockd_settings.png) | ![popup](/.github/assets/lockd_popup.png) |
+<p>
+  <img src="/.github/assets/lockd_locked.png" height="200" />
+  <img src="/.github/assets/lockd_ration.png" height="200" />
+  <img src="/.github/assets/lockd_settings.png" height="200" />
+  <img src="/.github/assets/lockd_analytics.png" height="200" />
+  <img src="/.github/assets/lockd_blocked.png" height="200" />
+  <img src="/.github/assets/lockd_popup.png" height="200" />
+</p>
 
 ## Installation
 
@@ -47,6 +57,13 @@ LOCKD intercepts navigation to distracting websites and asks you why you're ther
 | Exact | `youtube.com` | `youtube.com` | `music.youtube.com` |
 | Regex | `.*\.google\.com` | `mail.google.com` | `google.com` |
 
+## Rations vs Passes
+
+| Mode | How it works |
+| --- | --- |
+| Pass | Choose work/private, get a timed pass. When it expires, you're out. |
+| Ration | Daily time budget. Use it however you want. When it's gone, beg for overtime. |
+
 ## Motivation
 
 One-sec and freedom.to were too restrictive at work. So I built my own. Apparently that's easier than having self-control.
@@ -56,7 +73,7 @@ One-sec and freedom.to were too restrictive at work. So I built my own. Apparent
 - Desktop app (Rust) for system-wide blocking
 - Android app
 - Multi-device sync server
-- Statistics (for masochists)
+- ~~Statistics (for masochists)~~ Done. You're welcome.
 
 ## Philosophy
 

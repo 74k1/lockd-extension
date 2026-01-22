@@ -2,7 +2,6 @@ const browser = globalThis.browser || globalThis.chrome;
 
 const DEFAULT_SITES = [
   { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
-  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
   { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
   { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
   { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
@@ -83,6 +82,7 @@ let activeAnalyticsTab = null;     // { tabId, domain, hostname, url } - current
 let analyticsTrackingInterval = null; // 1-second interval for analytics time accumulation
 let unsavedAnalyticsSeconds = {};  // { [domain]: { seconds, url } } - in-memory tracking between saves
 let isTrackingAnalyticsTime = false; // Guard flag to prevent overlapping trackAnalyticsTime calls
+let tabsWithOverlay = new Set();   // Set of tabIds that currently have the overlay shown
 
 async function ensureInitialized() {
   if (isInitialized) return;
@@ -440,6 +440,28 @@ function startRationTracking() {
     browser.windows.onFocusChanged.addListener(handleWindowFocusChanged);
   }
   
+  // Listen for history state updates (SPA navigation like YouTube Shorts)
+  if (browser.webNavigation && browser.webNavigation.onHistoryStateUpdated) {
+    browser.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
+      if (details.frameId !== 0) return; // Only main frame
+      
+      try {
+        const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
+        if (activeTabs.length > 0 && activeTabs[0].id === details.tabId) {
+          await updateActiveRationTab(details.tabId);
+          await updateActiveAnalyticsTab(details.tabId);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    });
+  }
+  
+  // Clean up overlay state when tabs are closed
+  browser.tabs.onRemoved.addListener((tabId) => {
+    tabsWithOverlay.delete(tabId);
+  });
+  
   // Clear existing intervals
   if (rationTrackingInterval) {
     clearInterval(rationTrackingInterval);
@@ -507,10 +529,11 @@ async function handleTabUpdated(tabId, changeInfo, tab) {
 // Handle window focus changes
 async function handleWindowFocusChanged(windowId) {
   if (windowId === browser.windows.WINDOW_ID_NONE) {
-    // Browser lost focus, stop tracking
+    // Browser lost focus entirely (user switched to another app)
+    // Don't track time when browser isn't focused
     activeRationTab = null;
     activeAnalyticsTab = null;
-    console.log('[LOCKD] Window unfocused, pausing tracking');
+    // Don't log this to avoid console spam
     return;
   }
   
@@ -559,16 +582,52 @@ async function updateActiveRationTab(tabId) {
 }
 
 // Track ration time (called every 1 second)
-function trackRationTime() {
-  if (!activeRationTab) return;
+async function trackRationTime() {
   if (!isInitialized) return;
   if (isTrackingRationTime) return; // Prevent overlapping calls
   
   isTrackingRationTime = true;
-  const { tabId, domain, url } = activeRationTab;
   
-  // Get site config from in-memory config cache
-  browser.storage.local.get(['config']).then(stored => {
+  try {
+    // If no active ration tab, try to find one (handles cases where tracking was lost)
+    if (!activeRationTab) {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length > 0 && tabs[0].id && tabs[0].url) {
+        // Don't track if this tab has an overlay shown
+        if (tabsWithOverlay.has(tabs[0].id)) {
+          isTrackingRationTime = false;
+          return;
+        }
+        
+        const url = new URL(tabs[0].url);
+        const hostname = url.hostname.replace(/^www\./, '');
+        const site = await getSiteConfig(hostname);
+        
+        if (site && site.ration && !site.blocked) {
+          const hasPass = await hasActivePass(hostname);
+          if (!hasPass) {
+            activeRationTab = { tabId: tabs[0].id, domain: site.domain, hostname, url: tabs[0].url };
+          }
+        }
+      }
+    }
+    
+    if (!activeRationTab) {
+      isTrackingRationTime = false;
+      return;
+    }
+    
+    const { tabId, domain, url } = activeRationTab;
+    
+    // Don't track if this tab has an overlay shown
+    if (tabsWithOverlay.has(tabId)) {
+      activeRationTab = null;
+      isTrackingRationTime = false;
+      return;
+    }
+    
+    // Get site config
+    const stored = await browser.storage.local.get(['config']);
     const config = stored.config || DEFAULT_CONFIG;
     
     if (!config.enabled) {
@@ -597,7 +656,7 @@ function trackRationTime() {
     // Check if total budget exhausted (base + overtime)
     if (status.isExhausted) {
       // Save to storage immediately when exhausted
-      saveRationUsageToStorage();
+      await saveRationUsageToStorage();
       
       // Don't redirect again if we've already handled this exhaustion
       if (rationExhaustedHandled[domain]) {
@@ -613,7 +672,8 @@ function trackRationTime() {
       const askFeelings = site.askFeelings !== false;
       
       // Get the tab and redirect
-      browser.tabs.get(tabId).then(tab => {
+      try {
+        const tab = await browser.tabs.get(tabId);
         if (tab && tab.url) {
           if (askFeelings) {
             // Show feelings screen first
@@ -627,19 +687,15 @@ function trackRationTime() {
             });
           }
         }
-      }).catch(() => {
+      } catch (e) {
         // Tab doesn't exist anymore
-      }).finally(() => {
-        isTrackingRationTime = false;
-      });
-      return;
+      }
     }
-    
-    isTrackingRationTime = false;
-  }).catch(e => {
+  } catch (e) {
     console.error('[LOCKD] Error in trackRationTime:', e);
+  } finally {
     isTrackingRationTime = false;
-  });
+  }
 }
 
 // Track analytics time for ALL browsing (called every 1 second when trackAllBrowsing is enabled)
@@ -868,6 +924,10 @@ async function grantPass(domain, type, durationMinutes) {
 
 // Inject the blocker overlay into a tab
 async function showBlockOverlay(tabId, originalUrl, siteConfig, mode, extraParams = {}) {
+  // Mark this tab as having an overlay (stop tracking time)
+  tabsWithOverlay.add(tabId);
+  activeRationTab = null; // Stop tracking this tab
+  
   // Record block event in analytics
   recordBlockEvent(siteConfig.domain);
   saveAnalyticsToStorage();
@@ -1140,10 +1200,18 @@ async function handleMessage(message, sender) {
     
     case 'grantPass':
       await grantPass(message.domain, message.type, message.duration);
+      // Clear overlay state for this tab
+      if (sender.tab && sender.tab.id) {
+        tabsWithOverlay.delete(sender.tab.id);
+      }
       return { success: true };
     
     case 'grantOvertime':
       await grantOvertime(message.domain, message.minutes);
+      // Clear overlay state for this tab
+      if (sender.tab && sender.tab.id) {
+        tabsWithOverlay.delete(sender.tab.id);
+      }
       return { success: true };
     
     case 'getOvertimeStatus':

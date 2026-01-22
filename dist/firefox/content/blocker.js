@@ -11,6 +11,7 @@ let currentMode = null;
 let originalUrl = window.location.href;
 let currentFeeling = null;
 let canGoBack = false; // Whether there's history to go back to
+let referrerWouldBeBlocked = false; // Whether going back would hit the same blocked site
 
 // Motivational lines
 const motivationalLines = [
@@ -46,16 +47,132 @@ function getRandomLine() {
   return motivationalLines[Math.floor(Math.random() * motivationalLines.length)];
 }
 
-// Pause all videos on the page
-function pauseVideos() {
-  const videos = document.querySelectorAll('video');
-  videos.forEach(video => {
-    try {
-      if (!video.paused) {
-        video.pause();
+// Check if the referrer URL matches the same blocked site
+// If so, going back would just land on another blocked page
+function checkReferrerWouldBeBlocked() {
+  // For SPA sites like YouTube, document.referrer doesn't update on navigation
+  // So we check if the current site is rationed/blocked - if so, going back
+  // within the same site would likely hit another blocked page
+  
+  // If we're on a rationed site with exhausted budget, going back would be blocked too
+  if (siteConfig && (siteConfig.blocked || (siteConfig.ration && currentMode === 'ration-expired'))) {
+    // Check referrer if available
+    if (document.referrer) {
+      try {
+        const referrerUrl = new URL(document.referrer);
+        const referrerHostname = referrerUrl.hostname.replace(/^www\./, '');
+        
+        // Check if referrer matches the same site config
+        const siteMatch = siteConfig.match || 'base';
+        
+        switch (siteMatch) {
+          case 'exact':
+            if (referrerHostname === siteConfig.domain) return true;
+            break;
+          
+          case 'regex':
+            try {
+              const regex = new RegExp(siteConfig.domain);
+              if (regex.test(referrerHostname)) return true;
+            } catch (e) {
+              // Invalid regex
+            }
+            break;
+          
+          case 'base':
+          default:
+            if (referrerHostname === siteConfig.domain || 
+                referrerHostname.endsWith('.' + siteConfig.domain)) {
+              return true;
+            }
+        }
+      } catch (e) {
+        // Invalid referrer URL
       }
+    }
+    
+    // For SPAs: if no referrer or different site, check if this looks like internal navigation
+    // YouTube Shorts, clicking videos, etc. - history entries are same-site
+    // We can detect this by checking if the navigation type suggests same-site
+    if (window.performance && window.performance.navigation) {
+      // TYPE_BACK_FORWARD = 2, which means user used back/forward
+      // In that case, previous page was likely same site
+    }
+    
+    // Conservative approach for rationed/blocked sites:
+    // If we're on a rationed site with no budget, assume going back stays on same site
+    // This is safer - user can always close tab if needed
+    return true;
+  }
+  
+  return false;
+}
+
+// Pause all videos and audio on the page
+let mediaPauseInterval = null;
+
+function pauseAllMedia() {
+  // Pause all video elements
+  document.querySelectorAll('video').forEach(video => {
+    try {
+      video.pause();
+      video.muted = true;
     } catch (e) {
       // Ignore errors
+    }
+  });
+  
+  // Pause all audio elements
+  document.querySelectorAll('audio').forEach(audio => {
+    try {
+      audio.pause();
+      audio.muted = true;
+    } catch (e) {
+      // Ignore errors
+    }
+  });
+  
+  // YouTube specific: try to pause via their player API
+  try {
+    const ytPlayer = document.querySelector('#movie_player');
+    if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
+      ytPlayer.pauseVideo();
+    }
+  } catch (e) {
+    // Ignore
+  }
+}
+
+function startMediaPausing() {
+  // Pause immediately
+  pauseAllMedia();
+  
+  // Keep pausing every 100ms to catch dynamically loaded videos (YouTube Shorts, etc.)
+  if (mediaPauseInterval) {
+    clearInterval(mediaPauseInterval);
+  }
+  mediaPauseInterval = setInterval(pauseAllMedia, 100);
+}
+
+function stopMediaPausing() {
+  if (mediaPauseInterval) {
+    clearInterval(mediaPauseInterval);
+    mediaPauseInterval = null;
+  }
+  
+  // Unmute videos when overlay is removed
+  document.querySelectorAll('video').forEach(video => {
+    try {
+      video.muted = false;
+    } catch (e) {
+      // Ignore
+    }
+  });
+  document.querySelectorAll('audio').forEach(audio => {
+    try {
+      audio.muted = false;
+    } catch (e) {
+      // Ignore
     }
   });
 }
@@ -432,14 +549,20 @@ function showOverlay(mode, options = {}) {
   document.documentElement.style.overflow = 'hidden';
   
   // Check if we can go back (history length > 1 means there's a previous page)
-  // Also check if we came from a different origin
-  canGoBack = window.history.length > 1;
+  // But if the referrer is the same blocked site, going back would be pointless
+  const hasHistory = window.history.length > 1;
+  
+  // Check if referrer is from the same site (would also be blocked)
+  referrerWouldBeBlocked = checkReferrerWouldBeBlocked();
+  
+  // Can only meaningfully go back if there's history AND it wouldn't be blocked
+  canGoBack = hasHistory && !referrerWouldBeBlocked;
   
   // Update navigation buttons text based on whether we can go back
   updateNavigationButtons();
   
-  // Pause videos
-  pauseVideos();
+  // Pause all media (videos, audio) aggressively
+  startMediaPausing();
   
   // Setup based on mode
   switch (mode) {
@@ -477,12 +600,15 @@ function updateNavigationButtons() {
     if (canGoBack) {
       btn.textContent = 'Go Back';
     } else {
-      btn.textContent = 'Close Tab';
+      btn.textContent = 'Exit';
     }
   });
 }
 
 function removeOverlay() {
+  // Stop the media pausing interval and unmute
+  stopMediaPausing();
+  
   // Restore scrolling on the page
   document.body.style.overflow = '';
   document.documentElement.style.overflow = '';
