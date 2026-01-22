@@ -1,26 +1,26 @@
 const browser = globalThis.browser || globalThis.chrome;
 
 const DEFAULT_SITES = [
-  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
+  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
+  { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: false },
+  { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact', ration: true, rationMinutes: 30, askFeelings: false },
+  { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 3, askFeelings: false },
+  { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base', ration: true, rationMinutes: 5, askFeelings: false },
+  { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
+  { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: false },
 ];
 
 const DEFAULT_CONFIG = {
   sites: DEFAULT_SITES,
   workDuration: 30,
-  privateDelay: 15,
+  privateDelay: 30,
   privateDurationMin: 5,
   privateDurationMax: 30,
-  privateDurationDefault: 15,
+  privateDurationDefault: 5,
   // Extra time settings for ration mode
   extraTimeMin: 1,
   extraTimeMax: 60,
@@ -28,10 +28,8 @@ const DEFAULT_CONFIG = {
   enabled: true,
   // Analytics settings
   trackAllBrowsing: false, // When true, track time on ALL sites, not just configured ones
+  analyticsRetentionDays: null, // null = keep forever, number = days to retain
 };
-
-// Analytics data retention period (days)
-const ANALYTICS_RETENTION_DAYS = 90;
 
 // Domain aliases - map multiple domains to a single canonical domain for analytics
 const DOMAIN_ALIASES = {
@@ -260,9 +258,18 @@ function ensureAnalyticsEntry(domain, date = getTodayString()) {
 /**
  * Clean up analytics data older than retention period
  */
-function cleanExpiredAnalytics() {
+async function cleanExpiredAnalytics() {
+  const stored = await browser.storage.local.get('config');
+  const config = stored.config || DEFAULT_CONFIG;
+  const retentionDays = config.analyticsRetentionDays;
+  
+  // null or 0 means keep forever
+  if (!retentionDays) {
+    return;
+  }
+  
   const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - ANALYTICS_RETENTION_DAYS);
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
   const cutoffString = cutoffDate.toISOString().split('T')[0];
   
   let cleaned = 0;
@@ -275,7 +282,7 @@ function cleanExpiredAnalytics() {
   
   if (cleaned > 0) {
     browser.storage.local.set({ analyticsHistory });
-    console.log(`[LOCKD] Cleaned ${cleaned} old analytics entries (older than ${ANALYTICS_RETENTION_DAYS} days)`);
+    console.log(`[LOCKD] Cleaned ${cleaned} old analytics entries (older than ${retentionDays} days)`);
   }
 }
 
@@ -1208,6 +1215,18 @@ async function handleMessage(message, sender) {
     case 'logFeeling':
       await logFeeling(message.domain, message.feeling, message.durationMinutes || 0);
       return { success: true };
+    
+    case 'closeCurrentTab':
+      if (sender.tab && sender.tab.id) {
+        try {
+          await browser.tabs.remove(sender.tab.id);
+          return { success: true };
+        } catch (e) {
+          console.error('[LOCKD] Failed to close tab:', e);
+          return { success: false, error: e.message };
+        }
+      }
+      return { success: false, error: 'No tab to close' };
     
     case 'getFeelings':
       if (message.domain) {
