@@ -66,12 +66,12 @@ dev-chrome: build-chrome
 
 # Watch for changes and rebuild (requires watchexec)
 watch target="firefox":
-    watchexec -e js,html,css,json -w . -i dist "just build-{{target}}"
+    watchexec -e js,html,css,json -w . -w Justfile --ignore dist "just build-{{target}}"
 
 # Bump version (usage: just bump 1.0.1)
 bump version:
-    sed -i 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.json
-    sed -i 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.chrome.json
+    sed -i '' 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.json
+    sed -i '' 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.chrome.json
     @echo "Version bumped to {{version}}"
 
 # Show current version
@@ -79,7 +79,7 @@ version:
     @grep '"version"' manifest.json | head -1 | sed 's/.*: "\(.*\)".*/\1/'
 
 # Lint (requires web-ext)
-lint:
+lint: build-firefox
     cd dist/firefox && web-ext lint
 
 # Validate icons exist and are correct size (requires imagemagick)
