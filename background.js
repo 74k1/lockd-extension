@@ -9,7 +9,7 @@ const DEFAULT_SITES = [
   { domain: 'youtube.com', name: 'YouTube', work: true, private: true, blocked: false, match: 'exact', ration: true, rationMinutes: 30, askFeelings: true },
   { domain: 'tiktok.com', name: 'TikTok', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
   { domain: 'snapchat.com', name: 'Snapchat', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'linkedin.com', name: 'LinkedIn', work: true, private: false, blocked: false, match: 'base', ration: true, rationMinutes: 5, askFeelings: true },
   { domain: 'discord.com', name: 'Discord', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
   { domain: 'twitch.tv', name: 'Twitch', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
 ];
