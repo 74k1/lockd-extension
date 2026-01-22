@@ -17,10 +17,10 @@ const DEFAULT_SITES = [
 const DEFAULT_CONFIG = {
   sites: DEFAULT_SITES,
   workDuration: 30,
-  privateDelay: 15,
+  privateDelay: 30,
   privateDurationMin: 5,
   privateDurationMax: 30,
-  privateDurationDefault: 15,
+  privateDurationDefault: 5,
   // Extra time settings for ration mode
   extraTimeMin: 1,
   extraTimeMax: 60,
