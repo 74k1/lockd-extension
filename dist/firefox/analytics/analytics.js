@@ -268,13 +268,23 @@ function renderHeatmap() {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   
-  monthLabels.forEach((label, i) => {
+  // Create month label container that mirrors the grid structure
+  // We'll place empty spacers for weeks and month labels at the right positions
+  for (let weekIndex = 0; weekIndex < weeks.length; weekIndex++) {
     const span = document.createElement('span');
     span.className = 'heatmap-month';
-    span.textContent = monthNames[label.month];
-    span.style.marginLeft = i === 0 ? '0' : `${(label.weekIndex - (monthLabels[i-1]?.weekIndex || 0) - 1) * 15}px`;
+    span.style.flex = '1';
+    span.style.minWidth = '8px';
+    span.style.maxWidth = '20px';
+    
+    // Check if this week starts a new month
+    const monthLabel = monthLabels.find(ml => ml.weekIndex === weekIndex);
+    if (monthLabel) {
+      span.textContent = monthNames[monthLabel.month];
+    }
+    
     heatmapMonthsEl.appendChild(span);
-  });
+  }
   
   // Render day rows
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
