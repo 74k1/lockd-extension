@@ -28,10 +28,8 @@ const DEFAULT_CONFIG = {
   enabled: true,
   // Analytics settings
   trackAllBrowsing: false, // When true, track time on ALL sites, not just configured ones
+  analyticsRetentionDays: null, // null = keep forever, number = days to retain
 };
-
-// Analytics data retention period (days)
-const ANALYTICS_RETENTION_DAYS = 90;
 
 // Domain aliases - map multiple domains to a single canonical domain for analytics
 const DOMAIN_ALIASES = {
@@ -260,9 +258,18 @@ function ensureAnalyticsEntry(domain, date = getTodayString()) {
 /**
  * Clean up analytics data older than retention period
  */
-function cleanExpiredAnalytics() {
+async function cleanExpiredAnalytics() {
+  const stored = await browser.storage.local.get('config');
+  const config = stored.config || DEFAULT_CONFIG;
+  const retentionDays = config.analyticsRetentionDays;
+  
+  // null or 0 means keep forever
+  if (!retentionDays) {
+    return;
+  }
+  
   const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - ANALYTICS_RETENTION_DAYS);
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
   const cutoffString = cutoffDate.toISOString().split('T')[0];
   
   let cleaned = 0;
@@ -275,7 +282,7 @@ function cleanExpiredAnalytics() {
   
   if (cleaned > 0) {
     browser.storage.local.set({ analyticsHistory });
-    console.log(`[LOCKD] Cleaned ${cleaned} old analytics entries (older than ${ANALYTICS_RETENTION_DAYS} days)`);
+    console.log(`[LOCKD] Cleaned ${cleaned} old analytics entries (older than ${retentionDays} days)`);
   }
 }
 
