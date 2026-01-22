@@ -1,8 +1,8 @@
 const browser = globalThis.browser || globalThis.chrome;
 
 const DEFAULT_SITES = [
-  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
-  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
+  { domain: 'x.com', name: 'X / Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: true },
+  { domain: 'twitter.com', name: 'Twitter', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: true },
   { domain: 'facebook.com', name: 'Facebook', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
   { domain: 'instagram.com', name: 'Instagram', work: false, private: true, blocked: false, match: 'base', ration: false, rationMinutes: 5, askFeelings: true },
   { domain: 'reddit.com', name: 'Reddit', work: true, private: true, blocked: false, match: 'base', ration: true, rationMinutes: 15, askFeelings: true },
