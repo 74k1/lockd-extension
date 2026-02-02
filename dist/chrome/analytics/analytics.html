@@ -571,6 +571,27 @@
       color: var(--base03);
       font-size: 11px;
     }
+
+    .footer a {
+      color: var(--base04);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      color: var(--base06);
+      text-decoration: underline;
+    }
+
+    .footer-version {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .footer-made {
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -691,7 +712,12 @@
     </div>
 
     <div class="footer">
-      <span id="version"></span>
+      <div class="footer-version">
+        <a href="https://github.com/74k1/lockd-extension" target="_blank">src</a>
+        <span>/</span>
+        <span id="version"></span>
+      </div>
+      <div class="footer-made">made with ❤️ from 🇨🇭</div>
     </div>
   </div>
 

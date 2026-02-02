@@ -545,7 +545,14 @@
       text-decoration: underline;
     }
 
-    .footer-links {
+    .footer-version {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .footer-made {
       margin-top: 8px;
     }
 
@@ -747,10 +754,12 @@
     </div>
 
     <div class="footer">
-      <span id="version"></span>
-      <div class="footer-links">
+      <div class="footer-version">
         <a href="https://github.com/74k1/lockd-extension" target="_blank">src</a>
+        <span>/</span>
+        <span id="version"></span>
       </div>
+      <div class="footer-made">made with ❤️ from 🇨🇭</div>
     </div>
 
     <div class="footer-space"></div>
