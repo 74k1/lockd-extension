@@ -606,6 +606,12 @@ async function trackRationTime() {
         if (site && site.ration && !site.blocked) {
           const hasPass = await hasActivePass(hostname);
           if (!hasPass) {
+            // Don't track if already exhausted and handled
+            const status = getRationStatus(site.domain, site);
+            if (status.isExhausted && rationExhaustedHandled[site.domain]) {
+              isTrackingRationTime = false;
+              return;
+            }
             activeRationTab = { tabId: tabs[0].id, domain: site.domain, hostname, url: tabs[0].url };
           }
         }
@@ -642,6 +648,15 @@ async function trackRationTime() {
       return;
     }
     
+    // Check if already exhausted and handled - don't increment if so
+    const preStatus = getRationStatus(domain, site);
+    if (preStatus.isExhausted && rationExhaustedHandled[domain]) {
+      // Already exhausted and handled, don't track more seconds
+      activeRationTab = null;
+      isTrackingRationTime = false;
+      return;
+    }
+    
     // Increment usage in memory (1 second)
     const usedSeconds = incrementRationUsageInMemory(domain, 1);
     
@@ -660,11 +675,12 @@ async function trackRationTime() {
       
       // Don't redirect again if we've already handled this exhaustion
       if (rationExhaustedHandled[domain]) {
+        console.log(`[LOCKD] Ration exhausted but already handled: ${domain}`);
         isTrackingRationTime = false;
         return;
       }
       
-      console.log(`[LOCKD] Ration exhausted: ${domain} (used ${usedSeconds}s of ${status.totalBudgetSeconds}s)`);
+      console.log(`[LOCKD] Ration exhausted: ${domain} (used ${usedSeconds}s of ${status.totalBudgetSeconds}s, overtime: ${status.overtimeSeconds}s)`);
       activeRationTab = null;
       rationExhaustedHandled[domain] = true;
       
@@ -833,7 +849,9 @@ async function grantOvertime(domain, minutes) {
   };
   
   // Clear the exhausted flag so user can continue using their budget
+  const wasHandled = rationExhaustedHandled[domain];
   delete rationExhaustedHandled[domain];
+  console.log(`[LOCKD] Cleared exhausted flag for ${domain} (was: ${wasHandled})`);
   
   await browser.storage.local.set({ rationOvertime });
 }

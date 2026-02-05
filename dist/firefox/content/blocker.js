@@ -1,6 +1,12 @@
 // LOCKD Content Script - Overlay Blocker
 // Injects blocking overlay instead of navigating away
 
+// Guard against multiple injections (Chrome re-injects scripts)
+if (window.__lockdBlockerLoaded) {
+  // Script already loaded, just exit
+} else {
+  window.__lockdBlockerLoaded = true;
+
 const browser = globalThis.browser || globalThis.chrome;
 
 // State
@@ -186,98 +192,159 @@ function createOverlay() {
   
   const hostname = window.location.hostname.replace(/^www\./, '');
   
-  overlay.innerHTML = `
-    <div class="lockd-container">
-      <div class="lockd-logo">LOCKD</div>
-      <div class="lockd-domain">${hostname}</div>
-      
-      <!-- Choose Screen -->
-      <div class="lockd-screen lockd-choose-screen">
-        <div class="lockd-motivational">${getRandomLine()}</div>
-        <div class="lockd-notice lockd-work-only hidden">Work access only for this site</div>
-        <div class="lockd-notice lockd-private-only hidden">Private access only for this site</div>
-        <div class="lockd-buttons">
-          <button class="lockd-btn lockd-btn-work" data-action="work">Work</button>
-          <button class="lockd-btn lockd-btn-private" data-action="private">Private</button>
-        </div>
-      </div>
-      
-      <!-- Waiting Screen -->
-      <div class="lockd-screen lockd-waiting-screen">
-        <div class="lockd-timer">15</div>
-        <div class="lockd-waiting-text">Patience is a virtue...</div>
-      </div>
-      
-      <!-- Duration Screen -->
-      <div class="lockd-screen lockd-duration-screen">
-        <div class="lockd-slider-container">
-          <div class="lockd-slider-value private"><span class="lockd-duration-value">15</span> min</div>
-          <div class="lockd-slider-labels">
-            <span class="lockd-slider-min">5 min</span>
-            <span class="lockd-slider-max">30 min</span>
-          </div>
-          <input type="range" class="lockd-slider lockd-duration-slider" min="5" max="30" value="15">
-        </div>
-        <div class="lockd-buttons">
-          <button class="lockd-btn lockd-btn-back" data-action="back">Back</button>
-          <button class="lockd-btn lockd-btn-confirm" data-action="confirm-private">Confirm</button>
-        </div>
-      </div>
-      
-      <!-- Ration Expired Screen -->
-      <div class="lockd-screen lockd-ration-expired-screen">
-        <div class="lockd-ration-info">
-          Your <span class="lockd-ration-minutes">5</span> minute ration for <span class="lockd-site-name">${hostname}</span> has been used.
-        </div>
-        <div class="lockd-slider-container">
-          <div class="lockd-slider-value overtime"><span class="lockd-overtime-value">5</span> min</div>
-          <div class="lockd-slider-labels">
-            <span class="lockd-overtime-slider-min">1 min</span>
-            <span class="lockd-overtime-slider-max">60 min</span>
-          </div>
-          <input type="range" class="lockd-slider lockd-overtime-slider" min="1" max="60" value="5">
-        </div>
-        <div class="lockd-presets">
-          <button class="lockd-preset-btn" data-minutes="1">1m</button>
-          <button class="lockd-preset-btn active" data-minutes="5">5m</button>
-          <button class="lockd-preset-btn" data-minutes="10">10m</button>
-          <button class="lockd-preset-btn" data-minutes="15">15m</button>
-          <button class="lockd-preset-btn" data-minutes="30">30m</button>
-        </div>
-        <div class="lockd-buttons">
-          <button class="lockd-btn lockd-btn-back lockd-nav-btn" data-action="navigate-away">Go Back</button>
-          <button class="lockd-btn lockd-btn-overtime" data-action="add-overtime">Add Time</button>
-        </div>
-      </div>
-      
-      <!-- Feelings Screen -->
-      <div class="lockd-screen lockd-feelings-screen">
-        <div class="lockd-feelings-question">How do you feel after spending <span class="lockd-feelings-duration">15</span> minutes on <span class="lockd-feelings-site">${hostname}</span>?</div>
-        <div class="lockd-feelings-buttons">
-          <button class="lockd-feeling-btn" data-feeling="positive">Worth it</button>
-          <button class="lockd-feeling-btn" data-feeling="neutral">Meh</button>
-          <button class="lockd-feeling-btn" data-feeling="negative">Regret</button>
-        </div>
-      </div>
-      
-      <!-- Feelings Response Screen -->
-      <div class="lockd-screen lockd-feelings-response-screen">
-        <div class="lockd-feelings-response"></div>
-        <div class="lockd-buttons">
-          <button class="lockd-btn lockd-btn-confirm" data-action="feelings-continue">Continue</button>
-        </div>
-      </div>
-      
-      <!-- Blocked Screen -->
-      <div class="lockd-screen lockd-blocked-screen">
-        <div class="lockd-blocked-text">ACCESS BLOCKED</div>
-        <div class="lockd-blocked-reason">This site has been completely blocked.</div>
-        <div class="lockd-buttons">
-          <button class="lockd-btn lockd-btn-back lockd-nav-btn" data-action="navigate-away">Go Back</button>
-        </div>
-      </div>
-    </div>
-  `;
+  // Helper to create elements with classes and text
+  const el = (tag, className, text) => {
+    const elem = document.createElement(tag);
+    if (className) elem.className = className;
+    if (text) elem.textContent = text;
+    return elem;
+  };
+  
+  // Helper to create button with data attributes
+  const btn = (className, dataAttr, dataValue, text) => {
+    const button = el('button', className, text);
+    button.setAttribute(`data-${dataAttr}`, dataValue);
+    return button;
+  };
+  
+  // Main container
+  const container = el('div', 'lockd-container');
+  
+  // Logo and domain
+  container.appendChild(el('div', 'lockd-logo', 'LOCKD'));
+  container.appendChild(el('div', 'lockd-domain', hostname));
+  
+  // === Choose Screen ===
+  const chooseScreen = el('div', 'lockd-screen lockd-choose-screen');
+  chooseScreen.appendChild(el('div', 'lockd-motivational', getRandomLine()));
+  chooseScreen.appendChild(el('div', 'lockd-notice lockd-work-only hidden', 'Work access only for this site'));
+  chooseScreen.appendChild(el('div', 'lockd-notice lockd-private-only hidden', 'Private access only for this site'));
+  
+  const chooseButtons = el('div', 'lockd-buttons');
+  chooseButtons.appendChild(btn('lockd-btn lockd-btn-work', 'action', 'work', 'Work'));
+  chooseButtons.appendChild(btn('lockd-btn lockd-btn-private', 'action', 'private', 'Private'));
+  chooseScreen.appendChild(chooseButtons);
+  container.appendChild(chooseScreen);
+  
+  // === Waiting Screen ===
+  const waitingScreen = el('div', 'lockd-screen lockd-waiting-screen');
+  waitingScreen.appendChild(el('div', 'lockd-timer', '15'));
+  waitingScreen.appendChild(el('div', 'lockd-waiting-text', 'Patience is a virtue...'));
+  container.appendChild(waitingScreen);
+  
+  // === Duration Screen ===
+  const durationScreen = el('div', 'lockd-screen lockd-duration-screen');
+  
+  const durationSliderContainer = el('div', 'lockd-slider-container');
+  const durationSliderValue = el('div', 'lockd-slider-value private');
+  const durationValueSpan = el('span', 'lockd-duration-value', '15');
+  durationSliderValue.appendChild(durationValueSpan);
+  durationSliderValue.appendChild(document.createTextNode(' min'));
+  durationSliderContainer.appendChild(durationSliderValue);
+  
+  const durationLabels = el('div', 'lockd-slider-labels');
+  durationLabels.appendChild(el('span', 'lockd-slider-min', '5 min'));
+  durationLabels.appendChild(el('span', 'lockd-slider-max', '30 min'));
+  durationSliderContainer.appendChild(durationLabels);
+  
+  const durationSlider = document.createElement('input');
+  durationSlider.type = 'range';
+  durationSlider.className = 'lockd-slider lockd-duration-slider';
+  durationSlider.min = '5';
+  durationSlider.max = '30';
+  durationSlider.value = '15';
+  durationSliderContainer.appendChild(durationSlider);
+  durationScreen.appendChild(durationSliderContainer);
+  
+  const durationButtons = el('div', 'lockd-buttons');
+  durationButtons.appendChild(btn('lockd-btn lockd-btn-back', 'action', 'back', 'Back'));
+  durationButtons.appendChild(btn('lockd-btn lockd-btn-confirm', 'action', 'confirm-private', 'Confirm'));
+  durationScreen.appendChild(durationButtons);
+  container.appendChild(durationScreen);
+  
+  // === Ration Expired Screen ===
+  const rationScreen = el('div', 'lockd-screen lockd-ration-expired-screen');
+  
+  const rationInfo = el('div', 'lockd-ration-info');
+  rationInfo.appendChild(document.createTextNode('Your '));
+  rationInfo.appendChild(el('span', 'lockd-ration-minutes', '5'));
+  rationInfo.appendChild(document.createTextNode(' minute ration for '));
+  rationInfo.appendChild(el('span', 'lockd-site-name', hostname));
+  rationInfo.appendChild(document.createTextNode(' has been used.'));
+  rationScreen.appendChild(rationInfo);
+  
+  const overtimeSliderContainer = el('div', 'lockd-slider-container');
+  const overtimeSliderValue = el('div', 'lockd-slider-value overtime');
+  const overtimeValueSpan = el('span', 'lockd-overtime-value', '5');
+  overtimeSliderValue.appendChild(overtimeValueSpan);
+  overtimeSliderValue.appendChild(document.createTextNode(' min'));
+  overtimeSliderContainer.appendChild(overtimeSliderValue);
+  
+  const overtimeLabels = el('div', 'lockd-slider-labels');
+  overtimeLabels.appendChild(el('span', 'lockd-overtime-slider-min', '1 min'));
+  overtimeLabels.appendChild(el('span', 'lockd-overtime-slider-max', '60 min'));
+  overtimeSliderContainer.appendChild(overtimeLabels);
+  
+  const overtimeSlider = document.createElement('input');
+  overtimeSlider.type = 'range';
+  overtimeSlider.className = 'lockd-slider lockd-overtime-slider';
+  overtimeSlider.min = '1';
+  overtimeSlider.max = '60';
+  overtimeSlider.value = '5';
+  overtimeSliderContainer.appendChild(overtimeSlider);
+  rationScreen.appendChild(overtimeSliderContainer);
+  
+  const presets = el('div', 'lockd-presets');
+  const presetValues = [1, 5, 10, 15, 30];
+  presetValues.forEach(mins => {
+    const presetBtn = btn('lockd-preset-btn' + (mins === 5 ? ' active' : ''), 'minutes', mins.toString(), `${mins}m`);
+    presets.appendChild(presetBtn);
+  });
+  rationScreen.appendChild(presets);
+  
+  const rationButtons = el('div', 'lockd-buttons');
+  rationButtons.appendChild(btn('lockd-btn lockd-btn-back lockd-nav-btn', 'action', 'navigate-away', 'Go Back'));
+  rationButtons.appendChild(btn('lockd-btn lockd-btn-overtime', 'action', 'add-overtime', 'Add Time'));
+  rationScreen.appendChild(rationButtons);
+  container.appendChild(rationScreen);
+  
+  // === Feelings Screen ===
+  const feelingsScreen = el('div', 'lockd-screen lockd-feelings-screen');
+  
+  const feelingsQuestion = el('div', 'lockd-feelings-question');
+  feelingsQuestion.appendChild(document.createTextNode('How do you feel after spending '));
+  feelingsQuestion.appendChild(el('span', 'lockd-feelings-duration', '15'));
+  feelingsQuestion.appendChild(document.createTextNode(' minutes on '));
+  feelingsQuestion.appendChild(el('span', 'lockd-feelings-site', hostname));
+  feelingsQuestion.appendChild(document.createTextNode('?'));
+  feelingsScreen.appendChild(feelingsQuestion);
+  
+  const feelingsButtons = el('div', 'lockd-feelings-buttons');
+  feelingsButtons.appendChild(btn('lockd-feeling-btn', 'feeling', 'positive', 'Worth it'));
+  feelingsButtons.appendChild(btn('lockd-feeling-btn', 'feeling', 'neutral', 'Meh'));
+  feelingsButtons.appendChild(btn('lockd-feeling-btn', 'feeling', 'negative', 'Regret'));
+  feelingsScreen.appendChild(feelingsButtons);
+  container.appendChild(feelingsScreen);
+  
+  // === Feelings Response Screen ===
+  const feelingsResponseScreen = el('div', 'lockd-screen lockd-feelings-response-screen');
+  feelingsResponseScreen.appendChild(el('div', 'lockd-feelings-response'));
+  const feelingsResponseButtons = el('div', 'lockd-buttons');
+  feelingsResponseButtons.appendChild(btn('lockd-btn lockd-btn-confirm', 'action', 'feelings-continue', 'Continue'));
+  feelingsResponseScreen.appendChild(feelingsResponseButtons);
+  container.appendChild(feelingsResponseScreen);
+  
+  // === Blocked Screen ===
+  const blockedScreen = el('div', 'lockd-screen lockd-blocked-screen');
+  blockedScreen.appendChild(el('div', 'lockd-blocked-text', 'ACCESS BLOCKED'));
+  blockedScreen.appendChild(el('div', 'lockd-blocked-reason', 'This site has been completely blocked.'));
+  const blockedButtons = el('div', 'lockd-buttons');
+  blockedButtons.appendChild(btn('lockd-btn lockd-btn-back lockd-nav-btn', 'action', 'navigate-away', 'Go Back'));
+  blockedScreen.appendChild(blockedButtons);
+  container.appendChild(blockedScreen);
+  
+  // Append container to overlay
+  overlay.appendChild(container);
   
   // Add event listeners
   setupEventListeners();
@@ -367,7 +434,20 @@ async function handleAction(action) {
       
     case 'navigate-away':
       if (canGoBack) {
+        // Try to go back, but set a fallback in case it doesn't work
+        const currentUrl = window.location.href;
         window.history.back();
+        
+        // If we're still on the same page after a short delay, close the tab
+        setTimeout(async () => {
+          if (window.location.href === currentUrl) {
+            try {
+              await browser.runtime.sendMessage({ action: 'closeCurrentTab' });
+            } catch (e) {
+              window.close();
+            }
+          }
+        }, 100);
       } else {
         // Ask background to close this tab
         try {
@@ -548,15 +628,18 @@ function showOverlay(mode, options = {}) {
   document.body.style.overflow = 'hidden';
   document.documentElement.style.overflow = 'hidden';
   
-  // Check if we can go back (history length > 1 means there's a previous page)
-  // But if the referrer is the same blocked site, going back would be pointless
+  // Check if we can go back
+  // history.length is unreliable (often > 1 even for new tabs)
+  // Better signals: document.referrer being empty means likely no previous page
+  const hasReferrer = !!document.referrer;
   const hasHistory = window.history.length > 1;
   
   // Check if referrer is from the same site (would also be blocked)
   referrerWouldBeBlocked = checkReferrerWouldBeBlocked();
   
-  // Can only meaningfully go back if there's history AND it wouldn't be blocked
-  canGoBack = hasHistory && !referrerWouldBeBlocked;
+  // Can only meaningfully go back if there's a referrer, history, AND it wouldn't be blocked
+  // No referrer = likely new tab or direct navigation = nothing to go back to
+  canGoBack = hasReferrer && hasHistory && !referrerWouldBeBlocked;
   
   // Update navigation buttons text based on whether we can go back
   updateNavigationButtons();
@@ -692,3 +775,5 @@ async function checkOnLoad() {
 // Don't auto-check on load - let background script handle it
 // This avoids double-blocking issues
 // checkOnLoad();
+
+} // End of guard block
