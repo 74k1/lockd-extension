@@ -226,7 +226,11 @@ async function loadRationStatus() {
       usageEl.className = 'ration-usage';
       if (overtimeMinutes > 0) {
         // Show used in normal color, total in yellow (since overtime was used)
-        usageEl.innerHTML = `${usedMinutes}/<span style="color: var(--base0A)">${totalBudgetMinutes}m</span>`;
+        usageEl.textContent = `${usedMinutes}/`;
+        const totalSpan = document.createElement('span');
+        totalSpan.style.color = 'var(--base0A)';
+        totalSpan.textContent = `${totalBudgetMinutes}m`;
+        usageEl.appendChild(totalSpan);
       } else {
         usageEl.textContent = `${usedMinutes}/${totalBudgetMinutes}m`;
       }

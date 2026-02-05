@@ -83,8 +83,37 @@ function getSiteColorClass(domain, index) {
 }
 
 // Tooltip handling
+// content can be: { date: string, value: string } or { date: string, items: [{text: string, color: string}] }
 function showTooltip(e, content) {
-  tooltip.innerHTML = content;
+  tooltip.textContent = '';
+  
+  if (typeof content === 'object') {
+    if (content.date) {
+      const dateDiv = document.createElement('div');
+      dateDiv.className = 'tooltip-date';
+      dateDiv.textContent = content.date;
+      tooltip.appendChild(dateDiv);
+    }
+    
+    if (content.value) {
+      const valueDiv = document.createElement('div');
+      valueDiv.className = 'tooltip-value';
+      valueDiv.textContent = content.value;
+      tooltip.appendChild(valueDiv);
+    }
+    
+    if (content.items) {
+      for (const item of content.items) {
+        const itemDiv = document.createElement('div');
+        if (item.color) {
+          itemDiv.style.color = item.color;
+        }
+        itemDiv.textContent = item.text;
+        tooltip.appendChild(itemDiv);
+      }
+    }
+  }
+  
   tooltip.style.display = 'block';
   
   const x = e.clientX + 10;
@@ -311,13 +340,15 @@ function renderHeatmap() {
         const level = getHeatmapLevel(total, maxTotal);
         cell.setAttribute('data-level', level);
         
+        const tooltipData = {
+          date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          value: formatTime(total)
+        };
+        
         cell.addEventListener('mouseenter', (e) => {
-          showTooltip(e, `
-            <div class="tooltip-date">${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-            <div class="tooltip-value">${formatTime(total)}</div>
-          `);
+          showTooltip(e, tooltipData);
         });
-        cell.addEventListener('mousemove', (e) => showTooltip(e, tooltip.innerHTML));
+        cell.addEventListener('mousemove', (e) => showTooltip(e, tooltipData));
         cell.addEventListener('mouseleave', hideTooltip);
       }
       
@@ -392,7 +423,10 @@ function renderTrend() {
     const bar = document.createElement('div');
     bar.className = 'trend-bar';
     
-    let tooltipContent = `<div class="tooltip-date">${new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>`;
+    const tooltipData = {
+      date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      items: []
+    };
     
     sortedDomains.forEach((domain, di) => {
       const info = dayData[domain];
@@ -405,7 +439,7 @@ function renderTrend() {
         segment.style.height = maxDayTotal > 0 ? `${(seconds / maxDayTotal) * 130}px` : '0';
         bar.appendChild(segment);
         
-        tooltipContent += `<div style="color: ${getSiteColor(domain, di)}">${domain}: ${formatTime(seconds)}</div>`;
+        tooltipData.items.push({ text: `${domain}: ${formatTime(seconds)}`, color: getSiteColor(domain, di) });
       }
     });
     
@@ -423,11 +457,11 @@ function renderTrend() {
       segment.style.backgroundColor = 'var(--base03)';
       segment.style.height = maxDayTotal > 0 ? `${(otherSeconds / maxDayTotal) * 130}px` : '0';
       bar.appendChild(segment);
-      tooltipContent += `<div style="color: var(--base03)">Others: ${formatTime(otherSeconds)}</div>`;
+      tooltipData.items.push({ text: `Others: ${formatTime(otherSeconds)}`, color: 'var(--base03)' });
     }
     
-    bar.addEventListener('mouseenter', (e) => showTooltip(e, tooltipContent));
-    bar.addEventListener('mousemove', (e) => showTooltip(e, tooltipContent));
+    bar.addEventListener('mouseenter', (e) => showTooltip(e, tooltipData));
+    bar.addEventListener('mousemove', (e) => showTooltip(e, tooltipData));
     bar.addEventListener('mouseleave', hideTooltip);
     
     container.appendChild(bar);
@@ -744,13 +778,15 @@ function renderPeakHours() {
     bar.className = 'peak-bar';
     bar.style.height = maxHourly > 0 ? `${(hourlyTotals[h] / maxHourly) * 60}px` : '0';
     
+    const tooltipData = {
+      date: `${h.toString().padStart(2, '0')}:00 - ${(h + 1).toString().padStart(2, '0')}:00`,
+      value: formatTime(hourlyTotals[h])
+    };
+    
     bar.addEventListener('mouseenter', (e) => {
-      showTooltip(e, `
-        <div class="tooltip-date">${h.toString().padStart(2, '0')}:00 - ${(h + 1).toString().padStart(2, '0')}:00</div>
-        <div class="tooltip-value">${formatTime(hourlyTotals[h])}</div>
-      `);
+      showTooltip(e, tooltipData);
     });
-    bar.addEventListener('mousemove', (e) => showTooltip(e, tooltip.innerHTML));
+    bar.addEventListener('mousemove', (e) => showTooltip(e, tooltipData));
     bar.addEventListener('mouseleave', hideTooltip);
     
     const label = document.createElement('div');
@@ -765,9 +801,14 @@ function renderPeakHours() {
   // Summary
   if (peakHour && peakHour[1] > 0) {
     const h = parseInt(peakHour[0]);
-    peakSummaryEl.innerHTML = `Most active: <strong>${h.toString().padStart(2, '0')}:00 - ${(h + 1).toString().padStart(2, '0')}:00</strong> (${formatTime(peakHour[1])} total)`;
+    peakSummaryEl.textContent = '';
+    peakSummaryEl.appendChild(document.createTextNode('Most active: '));
+    const strong = document.createElement('strong');
+    strong.textContent = `${h.toString().padStart(2, '0')}:00 - ${(h + 1).toString().padStart(2, '0')}:00`;
+    peakSummaryEl.appendChild(strong);
+    peakSummaryEl.appendChild(document.createTextNode(` (${formatTime(peakHour[1])} total)`));
   } else {
-    peakSummaryEl.innerHTML = 'No data yet';
+    peakSummaryEl.textContent = 'No data yet';
   }
 }
 
