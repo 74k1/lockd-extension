@@ -81,8 +81,14 @@ let isTrackingRationTime = false;  // Guard flag to prevent overlapping trackRat
 let activeAnalyticsTab = null;     // { tabId, domain, hostname, url } - currently active tab for analytics
 let analyticsTrackingInterval = null; // 1-second interval for analytics time accumulation
 let unsavedAnalyticsSeconds = {};  // { [domain]: { seconds, url } } - in-memory tracking between saves
-let isTrackingAnalyticsTime = false; // Guard flag to prevent overlapping trackAnalyticsTime calls
 let tabsWithOverlay = new Set();   // Set of tabIds that currently have the overlay shown
+
+// Cached config to avoid reading storage on every tick
+let cachedConfig = null;
+
+// Timestamp-based tracking to avoid drift from setInterval inaccuracy
+let lastRationTickTime = null;     // Date.now() of last successful ration tick
+let lastAnalyticsTickTime = null;  // Date.now() of last successful analytics tick
 
 async function ensureInitialized() {
   if (isInitialized) return;
@@ -92,6 +98,9 @@ async function ensureInitialized() {
   if (!stored.config) {
     await browser.storage.local.set({ config: DEFAULT_CONFIG });
   }
+  
+  // Cache config in memory to avoid storage reads on every tick
+  cachedConfig = stored.config || DEFAULT_CONFIG;
   
   if (stored.passes) {
     activePasses = stored.passes;
@@ -133,6 +142,13 @@ browser.runtime.onInstalled.addListener(async () => {
 browser.runtime.onStartup.addListener(async () => {
   isInitialized = false;
   await ensureInitialized();
+});
+
+// Keep cachedConfig in sync when config is changed (e.g., from options page)
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.config && changes.config.newValue) {
+    cachedConfig = changes.config.newValue;
+  }
 });
 
 function cleanExpiredPasses() {
@@ -471,6 +487,7 @@ function startRationTracking() {
   }
   
   // Start the 1-second tracking interval (in-memory)
+  lastRationTickTime = Date.now();
   rationTrackingInterval = setInterval(() => {
     trackRationTime();
   }, 1000); // Every 1 second
@@ -533,6 +550,9 @@ async function handleWindowFocusChanged(windowId) {
     // Don't track time when browser isn't focused
     activeRationTab = null;
     activeAnalyticsTab = null;
+    // Reset tick timestamps so we don't count unfocused time on next tick
+    lastRationTickTime = null;
+    lastAnalyticsTickTime = null;
     // Don't log this to avoid console spam
     return;
   }
@@ -582,6 +602,7 @@ async function updateActiveRationTab(tabId) {
 }
 
 // Track ration time (called every 1 second)
+// Uses wall-clock timestamps to avoid drift from setInterval inaccuracy or async delays
 async function trackRationTime() {
   if (!isInitialized) return;
   if (isTrackingRationTime) return; // Prevent overlapping calls
@@ -589,6 +610,16 @@ async function trackRationTime() {
   isTrackingRationTime = true;
   
   try {
+    // Calculate actual elapsed wall-clock seconds since last tick
+    const now = Date.now();
+    const elapsedSeconds = lastRationTickTime ? Math.round((now - lastRationTickTime) / 1000) : 1;
+    lastRationTickTime = now;
+    
+    if (elapsedSeconds <= 0) {
+      isTrackingRationTime = false;
+      return;
+    }
+    
     // If no active ration tab, try to find one (handles cases where tracking was lost)
     if (!activeRationTab) {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -601,7 +632,7 @@ async function trackRationTime() {
         
         const url = new URL(tabs[0].url);
         const hostname = url.hostname.replace(/^www\./, '');
-        const site = await getSiteConfig(hostname);
+        const site = getSiteConfigCached(hostname);
         
         if (site && site.ration && !site.blocked) {
           const hasPass = await hasActivePass(hostname);
@@ -632,9 +663,8 @@ async function trackRationTime() {
       return;
     }
     
-    // Get site config
-    const stored = await browser.storage.local.get(['config']);
-    const config = stored.config || DEFAULT_CONFIG;
+    // Use cached config (kept in sync via storage.onChanged listener)
+    const config = cachedConfig || DEFAULT_CONFIG;
     
     if (!config.enabled) {
       isTrackingRationTime = false;
@@ -657,12 +687,12 @@ async function trackRationTime() {
       return;
     }
     
-    // Increment usage in memory (1 second)
-    const usedSeconds = incrementRationUsageInMemory(domain, 1);
+    // Increment usage in memory by actual elapsed wall-clock seconds
+    const usedSeconds = incrementRationUsageInMemory(domain, elapsedSeconds);
     
     // Update analytics
     if (url) {
-      updateAnalytics(domain, url, 1);
+      updateAnalytics(domain, url, elapsedSeconds);
     }
     
     // Get total budget including overtime
@@ -715,39 +745,37 @@ async function trackRationTime() {
 }
 
 // Track analytics time for ALL browsing (called every 1 second when trackAllBrowsing is enabled)
+// Uses wall-clock timestamps to avoid drift from setInterval inaccuracy
 function trackAnalyticsTime() {
   if (!activeAnalyticsTab) return;
   if (!isInitialized) return;
-  if (isTrackingAnalyticsTime) return; // Prevent overlapping calls
   
-  isTrackingAnalyticsTime = true;
+  // Calculate actual elapsed wall-clock seconds since last tick
+  const now = Date.now();
+  const elapsedSeconds = lastAnalyticsTickTime ? Math.round((now - lastAnalyticsTickTime) / 1000) : 1;
+  lastAnalyticsTickTime = now;
+  
+  if (elapsedSeconds <= 0) return;
+  
+  // Use cached config (kept in sync via storage.onChanged listener)
+  const config = cachedConfig || DEFAULT_CONFIG;
+  
+  if (!config.trackAllBrowsing) {
+    return;
+  }
+  
   const { domain, url } = activeAnalyticsTab;
   
-  // Get config to check if trackAllBrowsing is enabled
-  browser.storage.local.get(['config']).then(stored => {
-    const config = stored.config || DEFAULT_CONFIG;
-    
-    if (!config.trackAllBrowsing) {
-      isTrackingAnalyticsTime = false;
-      return;
-    }
-    
-    // Update analytics (1 second)
-    const normalizedDomain = normalizeDomain(domain);
-    updateAnalytics(normalizedDomain, url, 1);
-    
-    // Track unsaved seconds for batch saving
-    if (!unsavedAnalyticsSeconds[normalizedDomain]) {
-      unsavedAnalyticsSeconds[normalizedDomain] = { seconds: 0, url };
-    }
-    unsavedAnalyticsSeconds[normalizedDomain].seconds++;
-    unsavedAnalyticsSeconds[normalizedDomain].url = url;
-    
-    isTrackingAnalyticsTime = false;
-  }).catch(e => {
-    console.error('[LOCKD] Error in trackAnalyticsTime:', e);
-    isTrackingAnalyticsTime = false;
-  });
+  // Update analytics by actual elapsed wall-clock seconds
+  const normalizedDomain = normalizeDomain(domain);
+  updateAnalytics(normalizedDomain, url, elapsedSeconds);
+  
+  // Track unsaved seconds for batch saving
+  if (!unsavedAnalyticsSeconds[normalizedDomain]) {
+    unsavedAnalyticsSeconds[normalizedDomain] = { seconds: 0, url };
+  }
+  unsavedAnalyticsSeconds[normalizedDomain].seconds += elapsedSeconds;
+  unsavedAnalyticsSeconds[normalizedDomain].url = url;
 }
 
 // Update active analytics tab (for all-browsing tracking)
@@ -785,6 +813,7 @@ function startAnalyticsTracking() {
   }
   
   // Start the 1-second tracking interval
+  lastAnalyticsTickTime = Date.now();
   analyticsTrackingInterval = setInterval(() => {
     trackAnalyticsTime();
   }, 1000);
@@ -889,6 +918,19 @@ function hostnameMatchesSite(hostname, site) {
     default:
       return hostname === site.domain || hostname.endsWith('.' + site.domain);
   }
+}
+
+// Synchronous version of getSiteConfig that uses cachedConfig (for hot-path tick functions)
+function getSiteConfigCached(hostname) {
+  const config = cachedConfig || DEFAULT_CONFIG;
+  
+  for (const site of config.sites) {
+    if (hostnameMatchesSite(hostname, site)) {
+      return site;
+    }
+  }
+  
+  return null;
 }
 
 async function getSiteConfig(hostname) {
