@@ -64,13 +64,14 @@ function normalizeDomain(hostname) {
 
 let activePasses = {};
 let rationUsage = {};      // { [domain]: { date: 'YYYY-MM-DD', usedSeconds: number } }
-let rationOvertime = {};   // { [domain]: { expiresAt: number, grantedMinutes: number } }
+let rationOvertime = {};   // { [domain]: { grantedMinutes: number } }
 let feelingsLog = [];      // [{ domain, feeling, timestamp, durationMinutes }]
 let analyticsHistory = {}; // { [date]: { [domain]: { hours: {}, paths: {}, totalSeconds, overtimeSeconds, feelings: [], blocks } } }
 let isInitialized = false;
+let initPromise = null; // Guards against concurrent ensureInitialized() calls
 
 // Ration tracking state
-let activeRationTab = null;        // { tabId, domain, hostname, url } - currently active tab on a rationed site
+let activeRationTab = null;        // { tabId, domain, url } - currently active tab on a rationed site
 let rationTrackingInterval = null; // 1-second interval for time accumulation
 let rationStorageInterval = null;  // 15-second interval for persisting to storage
 let unsavedRationSeconds = {};     // { [domain]: seconds } - in-memory tracking between saves
@@ -78,7 +79,7 @@ let rationExhaustedHandled = {};   // { [domain]: true } - track if we've alread
 let isTrackingRationTime = false;  // Guard flag to prevent overlapping trackRationTime calls
 
 // All-browsing analytics tracking state (separate from ration tracking)
-let activeAnalyticsTab = null;     // { tabId, domain, hostname, url } - currently active tab for analytics
+let activeAnalyticsTab = null;     // { tabId, domain, url } - currently active tab for analytics
 let analyticsTrackingInterval = null; // 1-second interval for analytics time accumulation
 let unsavedAnalyticsSeconds = {};  // { [domain]: { seconds, url } } - in-memory tracking between saves
 let tabsWithOverlay = new Set();   // Set of tabIds that currently have the overlay shown
@@ -92,46 +93,51 @@ let lastAnalyticsTickTime = null;  // Date.now() of last successful analytics ti
 
 async function ensureInitialized() {
   if (isInitialized) return;
+  if (initPromise) return initPromise;
   
-  const stored = await browser.storage.local.get(['config', 'passes', 'rationUsage', 'rationOvertime', 'feelingsLog', 'analyticsHistory']);
+  initPromise = (async () => {
+    const stored = await browser.storage.local.get(['config', 'passes', 'rationUsage', 'rationOvertime', 'feelingsLog', 'analyticsHistory']);
+    
+    if (!stored.config) {
+      await browser.storage.local.set({ config: DEFAULT_CONFIG });
+    }
+    
+    // Cache config in memory to avoid storage reads on every tick
+    cachedConfig = stored.config || DEFAULT_CONFIG;
+    
+    if (stored.passes) {
+      activePasses = stored.passes;
+    }
+    
+    if (stored.rationUsage) {
+      rationUsage = stored.rationUsage;
+    }
+    
+    if (stored.rationOvertime) {
+      rationOvertime = stored.rationOvertime;
+    }
+    
+    if (stored.feelingsLog) {
+      feelingsLog = stored.feelingsLog;
+    }
+    
+    if (stored.analyticsHistory) {
+      analyticsHistory = stored.analyticsHistory;
+    }
+    
+    await cleanExpiredAnalytics();
+    
+    cleanExpiredPasses();
+    cleanExpiredRationUsage();
+    setupMidnightReset();
+    startRationTracking();
+    
+    isInitialized = true;
+    initPromise = null;
+    console.log('[LOCKD] Initialized');
+  })();
   
-  if (!stored.config) {
-    await browser.storage.local.set({ config: DEFAULT_CONFIG });
-  }
-  
-  // Cache config in memory to avoid storage reads on every tick
-  cachedConfig = stored.config || DEFAULT_CONFIG;
-  
-  if (stored.passes) {
-    activePasses = stored.passes;
-  }
-  
-  if (stored.rationUsage) {
-    rationUsage = stored.rationUsage;
-  }
-  
-  if (stored.rationOvertime) {
-    rationOvertime = stored.rationOvertime;
-  }
-  
-  if (stored.feelingsLog) {
-    feelingsLog = stored.feelingsLog;
-  }
-  
-  if (stored.analyticsHistory) {
-    analyticsHistory = stored.analyticsHistory;
-  }
-  
-  cleanExpiredOvertime();
-  cleanExpiredAnalytics();
-  
-  cleanExpiredPasses();
-  cleanExpiredRationUsage();
-  setupMidnightReset();
-  startRationTracking();
-  
-  isInitialized = true;
-  console.log('[LOCKD] Initialized');
+  return initPromise;
 }
 
 browser.runtime.onInstalled.addListener(async () => {
@@ -167,9 +173,9 @@ function cleanExpiredPasses() {
   }
 }
 
-// Get today's date as ISO string (YYYY-MM-DD)
+// Get today's date as local date string (YYYY-MM-DD)
 function getTodayString() {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('sv');
 }
 
 // Get current hour (0-23)
@@ -186,9 +192,19 @@ function extractPathSegment(url) {
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
     
     // Check if this site should have path tracking
-    const shouldTrackPaths = Object.keys(SITES_WITH_PATHS).some(site => 
-      hostname === site || hostname.endsWith('.' + site)
-    );
+    // Direct lookup by hostname, then by base domain (e.g., 'boards.4chan.org' -> '4chan.org')
+    let shouldTrackPaths = !!SITES_WITH_PATHS[hostname];
+    if (!shouldTrackPaths) {
+      const parts = hostname.split('.');
+      // Try progressively shorter domain suffixes (e.g., 'sub.reddit.com' -> 'reddit.com')
+      for (let i = 1; i < parts.length - 1; i++) {
+        const candidate = parts.slice(i).join('.');
+        if (SITES_WITH_PATHS[candidate]) {
+          shouldTrackPaths = true;
+          break;
+        }
+      }
+    }
     
     if (!shouldTrackPaths) {
       return null; // No path tracking for this site
@@ -275,8 +291,7 @@ function ensureAnalyticsEntry(domain, date = getTodayString()) {
  * Clean up analytics data older than retention period
  */
 async function cleanExpiredAnalytics() {
-  const stored = await browser.storage.local.get('config');
-  const config = stored.config || DEFAULT_CONFIG;
+  const config = cachedConfig || DEFAULT_CONFIG;
   const retentionDays = config.analyticsRetentionDays;
   
   // null or 0 means keep forever
@@ -286,7 +301,7 @@ async function cleanExpiredAnalytics() {
   
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-  const cutoffString = cutoffDate.toISOString().split('T')[0];
+  const cutoffString = cutoffDate.toLocaleDateString('sv');
   
   let cleaned = 0;
   for (const date of Object.keys(analyticsHistory)) {
@@ -329,11 +344,6 @@ async function saveAnalyticsToStorage() {
 // Record a block event in analytics
 function recordBlockEvent(domain) {
   ensureAnalyticsEntry(normalizeDomain(domain)).blocks++;
-}
-
-// Record overtime in analytics
-function recordOvertimeInAnalytics(domain, seconds) {
-  ensureAnalyticsEntry(normalizeDomain(domain)).overtimeSeconds += seconds;
 }
 
 // Record feeling in analytics
@@ -397,15 +407,6 @@ function getRationStatus(domain, site) {
     remainingSeconds: Math.max(0, totalBudgetSeconds - usedSeconds),
     isExhausted: usedSeconds >= totalBudgetSeconds
   };
-}
-
-// Check if a rationed site has budget remaining
-async function hasRationBudget(hostname) {
-  const site = await getSiteConfig(hostname);
-  if (!site || !site.ration) return false;
-  
-  const status = getRationStatus(site.domain, site);
-  return !status.isExhausted;
 }
 
 // Increment ration usage for a domain (in-memory only)
@@ -571,7 +572,7 @@ async function handleWindowFocusChanged(windowId) {
 
 // Update which rationed site is currently active
 async function updateActiveRationTab(tabId) {
-  await ensureInitialized();
+  if (!isInitialized) await ensureInitialized();
   
   try {
     const tab = await browser.tabs.get(tabId);
@@ -583,13 +584,14 @@ async function updateActiveRationTab(tabId) {
     const url = new URL(tab.url);
     const hostname = url.hostname.replace(/^www\./, '');
     
-    const site = await getSiteConfig(hostname);
+    const site = getSiteConfigCached(hostname);
     
     if (site && site.ration && !site.blocked) {
       // Check if has active pass (don't track ration if using a pass)
-      const hasPass = await hasActivePass(hostname);
-      if (!hasPass) {
-        activeRationTab = { tabId, domain: site.domain, hostname, url: tab.url };
+      if (!hasActivePassCached(hostname)) {
+        // Tab is actively on a rationed site — clear any stale overlay state
+        tabsWithOverlay.delete(tabId);
+        activeRationTab = { tabId, domain: site.domain, url: tab.url };
         console.log(`[LOCKD] Tracking ration: ${site.domain}`);
         return;
       }
@@ -611,8 +613,9 @@ async function trackRationTime() {
   
   try {
     // Calculate actual elapsed wall-clock seconds since last tick
+    // Cap at 5s to prevent time spikes after laptop sleep or service worker suspension
     const now = Date.now();
-    const elapsedSeconds = lastRationTickTime ? Math.round((now - lastRationTickTime) / 1000) : 1;
+    const elapsedSeconds = lastRationTickTime ? Math.min(5, Math.round((now - lastRationTickTime) / 1000)) : 1;
     lastRationTickTime = now;
     
     if (elapsedSeconds <= 0) {
@@ -635,7 +638,7 @@ async function trackRationTime() {
         const site = getSiteConfigCached(hostname);
         
         if (site && site.ration && !site.blocked) {
-          const hasPass = await hasActivePass(hostname);
+          const hasPass = hasActivePassCached(hostname);
           if (!hasPass) {
             // Don't track if already exhausted and handled
             const status = getRationStatus(site.domain, site);
@@ -643,7 +646,7 @@ async function trackRationTime() {
               isTrackingRationTime = false;
               return;
             }
-            activeRationTab = { tabId: tabs[0].id, domain: site.domain, hostname, url: tabs[0].url };
+            activeRationTab = { tabId: tabs[0].id, domain: site.domain, url: tabs[0].url };
           }
         }
       }
@@ -751,8 +754,9 @@ function trackAnalyticsTime() {
   if (!isInitialized) return;
   
   // Calculate actual elapsed wall-clock seconds since last tick
+  // Cap at 5s to prevent time spikes after laptop sleep or service worker suspension
   const now = Date.now();
-  const elapsedSeconds = lastAnalyticsTickTime ? Math.round((now - lastAnalyticsTickTime) / 1000) : 1;
+  const elapsedSeconds = lastAnalyticsTickTime ? Math.min(5, Math.round((now - lastAnalyticsTickTime) / 1000)) : 1;
   lastAnalyticsTickTime = now;
   
   if (elapsedSeconds <= 0) return;
@@ -767,20 +771,19 @@ function trackAnalyticsTime() {
   const { domain, url } = activeAnalyticsTab;
   
   // Update analytics by actual elapsed wall-clock seconds
-  const normalizedDomain = normalizeDomain(domain);
-  updateAnalytics(normalizedDomain, url, elapsedSeconds);
+  updateAnalytics(domain, url, elapsedSeconds);
   
   // Track unsaved seconds for batch saving
-  if (!unsavedAnalyticsSeconds[normalizedDomain]) {
-    unsavedAnalyticsSeconds[normalizedDomain] = { seconds: 0, url };
+  if (!unsavedAnalyticsSeconds[domain]) {
+    unsavedAnalyticsSeconds[domain] = { seconds: 0, url };
   }
-  unsavedAnalyticsSeconds[normalizedDomain].seconds += elapsedSeconds;
-  unsavedAnalyticsSeconds[normalizedDomain].url = url;
+  unsavedAnalyticsSeconds[domain].seconds += elapsedSeconds;
+  unsavedAnalyticsSeconds[domain].url = url;
 }
 
 // Update active analytics tab (for all-browsing tracking)
 async function updateActiveAnalyticsTab(tabId) {
-  await ensureInitialized();
+  if (!isInitialized) await ensureInitialized();
   
   try {
     const tab = await browser.tabs.get(tabId);
@@ -799,7 +802,7 @@ async function updateActiveAnalyticsTab(tabId) {
     const hostname = url.hostname.replace(/^www\./, '');
     const normalizedDomain = normalizeDomain(hostname);
     
-    activeAnalyticsTab = { tabId, domain: normalizedDomain, hostname, url: tab.url };
+    activeAnalyticsTab = { tabId, domain: normalizedDomain, url: tab.url };
   } catch (e) {
     activeAnalyticsTab = null;
   }
@@ -858,15 +861,9 @@ async function logFeeling(domain, feeling, durationMinutes) {
   console.log(`[LOCKD] Feeling logged: ${domain} - ${feeling}`);
 }
 
-// Clean up expired overtime entries (only called at midnight to fully reset)
-function cleanExpiredOvertime() {
-  // Don't auto-delete expired overtime - we keep grantedMinutes for accumulation
-  // This function is now only used at midnight to fully clear everything
-}
-
 // Grant overtime for a rationed site (adds to daily budget, no timer)
 async function grantOvertime(domain, minutes) {
-  await ensureInitialized();
+  if (!isInitialized) await ensureInitialized();
   
   const existing = rationOvertime[domain];
   const totalGrantedMinutes = (existing?.grantedMinutes || 0) + minutes;
@@ -933,8 +930,21 @@ function getSiteConfigCached(hostname) {
   return null;
 }
 
+// Synchronous version of hasActivePass that uses cachedConfig and in-memory activePasses
+function hasActivePassCached(hostname) {
+  const site = getSiteConfigCached(hostname);
+  if (!site) return false;
+  
+  const pass = activePasses[site.domain];
+  if (pass && pass.expiresAt > Date.now()) {
+    return true;
+  }
+  
+  return false;
+}
+
 async function getSiteConfig(hostname) {
-  await ensureInitialized();
+  if (!isInitialized) await ensureInitialized();
   const stored = await browser.storage.local.get(['config']);
   const config = stored.config || DEFAULT_CONFIG;
   
@@ -947,30 +957,16 @@ async function getSiteConfig(hostname) {
   return null;
 }
 
-async function hasActivePass(hostname) {
-  await ensureInitialized();
-  cleanExpiredPasses();
-  
-  const site = await getSiteConfig(hostname);
-  if (!site) return false;
-  
-  const pass = activePasses[site.domain];
-  if (pass && pass.expiresAt > Date.now()) {
-    return true;
-  }
-  
-  return false;
-}
-
 async function grantPass(domain, type, durationMinutes) {
-  await ensureInitialized();
+  if (!isInitialized) await ensureInitialized();
   
-  const expiresAt = Date.now() + (durationMinutes * 60 * 1000);
+  const now = Date.now();
+  const expiresAt = now + (durationMinutes * 60 * 1000);
   
   activePasses[domain] = {
     type,
     expiresAt,
-    grantedAt: Date.now(),
+    grantedAt: now,
   };
   
   await browser.storage.local.set({ passes: activePasses });
@@ -990,11 +986,10 @@ async function showBlockOverlay(tabId, originalUrl, siteConfig, mode, extraParam
   
   // Record block event in analytics
   recordBlockEvent(siteConfig.domain);
-  saveAnalyticsToStorage();
+  await saveAnalyticsToStorage();
   
-  // Get config for the overlay
-  const stored = await browser.storage.local.get(['config']);
-  const config = stored.config || DEFAULT_CONFIG;
+  // Get config for the overlay (use cached config)
+  const config = cachedConfig || DEFAULT_CONFIG;
   
   try {
     // First, inject the CSS
@@ -1043,9 +1038,8 @@ function redirectToBlockedPage(tabId, originalUrl, siteConfig, mode, extraParams
 }
 
 async function checkTabsForExpiredPasses(expiredDomain) {
-  await ensureInitialized();
-  const stored = await browser.storage.local.get(['config']);
-  const config = stored.config || DEFAULT_CONFIG;
+  if (!isInitialized) await ensureInitialized();
+  const config = cachedConfig || DEFAULT_CONFIG;
   
   if (!config.enabled) return;
   
@@ -1059,11 +1053,10 @@ async function checkTabsForExpiredPasses(expiredDomain) {
         const url = new URL(tab.url);
         const hostname = url.hostname.replace(/^www\./, '');
         
-        const site = await getSiteConfig(hostname);
+        const site = getSiteConfigCached(hostname);
         if (!site) continue;
         
-        const hasPass = await hasActivePass(hostname);
-        if (site.domain === expiredDomain && !hasPass) {
+        if (site.domain === expiredDomain && !hasActivePassCached(hostname)) {
           console.log(`[LOCKD] Pass expired, redirecting tab ${tab.id} from ${hostname}`);
           
           // For rationed sites with exhausted budget, show ration-expired
@@ -1092,9 +1085,8 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
   browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
     if (details.frameId !== 0) return;
     
-    await ensureInitialized();
-    const stored = await browser.storage.local.get(['config']);
-    const config = stored.config || DEFAULT_CONFIG;
+    if (!isInitialized) await ensureInitialized();
+    const config = cachedConfig || DEFAULT_CONFIG;
     
     if (!config.enabled) return;
     
@@ -1102,7 +1094,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       const url = new URL(details.url);
       const hostname = url.hostname.replace(/^www\./, '');
       
-      const site = await getSiteConfig(hostname);
+      const site = getSiteConfigCached(hostname);
       if (!site) return;
       
       // Completely blocked - no access ever
@@ -1112,8 +1104,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       }
       
       // Has active pass - allow
-      const hasPass = await hasActivePass(hostname);
-      if (hasPass) {
+      if (hasActivePassCached(hostname)) {
         return;
       }
       
@@ -1123,7 +1114,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
         
         if (!status.isExhausted) {
           // Budget remaining - allow access and start tracking immediately
-          activeRationTab = { tabId: details.tabId, domain: site.domain, hostname };
+          activeRationTab = { tabId: details.tabId, domain: site.domain, url: details.url };
           return;
         }
         
@@ -1149,9 +1140,8 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
   browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.status !== 'loading' || !changeInfo.url) return;
     
-    await ensureInitialized();
-    const stored = await browser.storage.local.get(['config']);
-    const config = stored.config || DEFAULT_CONFIG;
+    if (!isInitialized) await ensureInitialized();
+    const config = cachedConfig || DEFAULT_CONFIG;
     
     if (!config.enabled) return;
     
@@ -1159,7 +1149,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       const url = new URL(changeInfo.url);
       const hostname = url.hostname.replace(/^www\./, '');
       
-      const site = await getSiteConfig(hostname);
+      const site = getSiteConfigCached(hostname);
       if (!site) return;
       
       if (changeInfo.url.includes(browser.runtime.id)) return;
@@ -1171,8 +1161,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       }
       
       // Has active pass - allow
-      const hasPass = await hasActivePass(hostname);
-      if (hasPass) {
+      if (hasActivePassCached(hostname)) {
         return;
       }
       
@@ -1183,7 +1172,7 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
         if (!status.isExhausted) {
           // Budget remaining - allow access and start tracking immediately
           console.log(`[LOCKD] Ration access: ${site.domain} (${Math.floor(status.remainingSeconds / 60)}min ${status.remainingSeconds % 60}s left)`);
-          activeRationTab = { tabId, domain: site.domain, hostname };
+          activeRationTab = { tabId, domain: site.domain, url: changeInfo.url };
           return;
         }
         
@@ -1216,11 +1205,10 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name.startsWith('pass-')) {
     const domain = alarm.name.replace('pass-', '');
     
-    await ensureInitialized();
+    if (!isInitialized) await ensureInitialized();
     
     // Get pass info before deleting
     const pass = activePasses[domain];
-    const passDuration = pass ? Math.round((pass.expiresAt - pass.grantedAt) / 60000) : 0;
     
     console.log(`[LOCKD] Pass expired: ${domain}, type: ${pass?.type}`);
     
@@ -1244,7 +1232,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleMessage(message, sender) {
-  await ensureInitialized();
+  if (!isInitialized) await ensureInitialized();
   
   switch (message.action) {
     case 'getConfig':
@@ -1275,7 +1263,6 @@ async function handleMessage(message, sender) {
       return { success: true };
     
     case 'getOvertimeStatus':
-      cleanExpiredOvertime();
       if (message.domain) {
         return getOvertimeStatus(message.domain);
       }
@@ -1323,7 +1310,7 @@ async function handleMessage(message, sender) {
     case 'getRationUsage':
       cleanExpiredRationUsage();
       if (message.domain) {
-        const site = await getSiteConfig(message.domain);
+        const site = getSiteConfigCached(message.domain);
         if (site && site.ration) {
           return getRationStatus(site.domain, site);
         }
@@ -1331,8 +1318,7 @@ async function handleMessage(message, sender) {
       }
       // Return all ration usage
       const allUsage = {};
-      const storedConfigForRation = await browser.storage.local.get(['config']);
-      const configForRation = storedConfigForRation.config || DEFAULT_CONFIG;
+      const configForRation = cachedConfig || DEFAULT_CONFIG;
       for (const site of configForRation.sites) {
         if (site.ration) {
           allUsage[site.domain] = getRationStatus(site.domain, site);
@@ -1375,8 +1361,7 @@ async function handleMessage(message, sender) {
       console.log('[LOCKD] getUsageStats - rationOvertime:', JSON.stringify(rationOvertime));
       
       // Ration usage
-      const storedConfigForStats = await browser.storage.local.get(['config']);
-      const configForStats = storedConfigForStats.config || DEFAULT_CONFIG;
+      const configForStats = cachedConfig || DEFAULT_CONFIG;
       for (const site of configForStats.sites) {
         if (site.ration) {
           stats.rationUsage[site.domain] = {
@@ -1421,69 +1406,6 @@ async function handleMessage(message, sender) {
       }
       
       return filteredAnalytics;
-    
-    case 'getAnalyticsSummary':
-      // Get aggregated analytics summary
-      // message: { days?: number } - defaults to 30
-      const summaryDays = message.days || 30;
-      const summaryEndDate = new Date();
-      const summaryStartDate = new Date();
-      summaryStartDate.setDate(summaryStartDate.getDate() - summaryDays);
-      
-      const summary = {
-        totalSeconds: 0,
-        byDomain: {},      // { [domain]: { totalSeconds, paths: {}, hourlyAvg: {} } }
-        byDate: {},        // { [date]: totalSeconds }
-        peakHours: {},     // { [hour]: totalSeconds }
-        feelings: { positive: 0, neutral: 0, negative: 0 },
-        totalBlocks: 0
-      };
-      
-      for (const [date, domains] of Object.entries(analyticsHistory)) {
-        const dateObj = new Date(date);
-        if (dateObj < summaryStartDate || dateObj > summaryEndDate) continue;
-        
-        summary.byDate[date] = 0;
-        
-        for (const [domain, data] of Object.entries(domains)) {
-          // Initialize domain summary
-          if (!summary.byDomain[domain]) {
-            summary.byDomain[domain] = {
-              totalSeconds: 0,
-              paths: {},
-              hours: {}
-            };
-          }
-          
-          // Aggregate totals
-          summary.totalSeconds += data.totalSeconds;
-          summary.byDate[date] += data.totalSeconds;
-          summary.byDomain[domain].totalSeconds += data.totalSeconds;
-          summary.totalBlocks += data.blocks || 0;
-          
-          // Aggregate paths
-          for (const [path, seconds] of Object.entries(data.paths || {})) {
-            summary.byDomain[domain].paths[path] = 
-              (summary.byDomain[domain].paths[path] || 0) + seconds;
-          }
-          
-          // Aggregate hourly data
-          for (const [hour, seconds] of Object.entries(data.hours || {})) {
-            summary.byDomain[domain].hours[hour] = 
-              (summary.byDomain[domain].hours[hour] || 0) + seconds;
-            summary.peakHours[hour] = (summary.peakHours[hour] || 0) + seconds;
-          }
-          
-          // Aggregate feelings
-          for (const feeling of (data.feelings || [])) {
-            if (summary.feelings[feeling] !== undefined) {
-              summary.feelings[feeling]++;
-            }
-          }
-        }
-      }
-      
-      return summary;
     
     case 'clearAnalytics':
       analyticsHistory = {};

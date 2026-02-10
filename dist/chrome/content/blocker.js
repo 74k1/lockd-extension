@@ -14,10 +14,9 @@ let overlay = null;
 let config = null;
 let siteConfig = null;
 let currentMode = null;
-let originalUrl = window.location.href;
-let currentFeeling = null;
 let canGoBack = false; // Whether there's history to go back to
 let referrerWouldBeBlocked = false; // Whether going back would hit the same blocked site
+let waitingCountdownInterval = null; // Countdown interval for private waiting screen
 
 // Motivational lines
 const motivationalLines = [
@@ -95,14 +94,6 @@ function checkReferrerWouldBeBlocked() {
       } catch (e) {
         // Invalid referrer URL
       }
-    }
-    
-    // For SPAs: if no referrer or different site, check if this looks like internal navigation
-    // YouTube Shorts, clicking videos, etc. - history entries are same-site
-    // We can detect this by checking if the navigation type suggests same-site
-    if (window.performance && window.performance.navigation) {
-      // TYPE_BACK_FORWARD = 2, which means user used back/forward
-      // In that case, previous page was likely same site
     }
     
     // Conservative approach for rationed/blocked sites:
@@ -419,6 +410,10 @@ async function handleAction(action) {
       break;
       
     case 'back':
+      if (waitingCountdownInterval) {
+        clearInterval(waitingCountdownInterval);
+        waitingCountdownInterval = null;
+      }
       showScreen('choose');
       break;
       
@@ -468,8 +463,6 @@ async function handleAction(action) {
 }
 
 async function handleFeeling(feeling) {
-  currentFeeling = feeling;
-  
   // Log the feeling
   try {
     await browser.runtime.sendMessage({
@@ -492,16 +485,23 @@ async function handleFeeling(feeling) {
 }
 
 function startWaitingCountdown() {
+  // Clear any existing countdown
+  if (waitingCountdownInterval) {
+    clearInterval(waitingCountdownInterval);
+    waitingCountdownInterval = null;
+  }
+  
   let seconds = config.privateDelay || 15;
   const timerEl = overlay.querySelector('.lockd-timer');
   timerEl.textContent = seconds;
   
-  const interval = setInterval(() => {
+  waitingCountdownInterval = setInterval(() => {
     seconds--;
     timerEl.textContent = seconds;
     
     if (seconds <= 0) {
-      clearInterval(interval);
+      clearInterval(waitingCountdownInterval);
+      waitingCountdownInterval = null;
       showScreen('duration');
     }
   }, 1000);
@@ -692,6 +692,12 @@ function removeOverlay() {
   // Stop the media pausing interval and unmute
   stopMediaPausing();
   
+  // Clear any running countdown
+  if (waitingCountdownInterval) {
+    clearInterval(waitingCountdownInterval);
+    waitingCountdownInterval = null;
+  }
+  
   // Restore scrolling on the page
   document.body.style.overflow = '';
   document.documentElement.style.overflow = '';
@@ -715,65 +721,5 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
-
-// Check if we should show overlay on page load (in case background didn't catch it)
-async function checkOnLoad() {
-  try {
-    const hostname = window.location.hostname.replace(/^www\./, '');
-    
-    // Get site config
-    siteConfig = await browser.runtime.sendMessage({ 
-      action: 'getSiteConfig', 
-      hostname: hostname 
-    });
-    
-    if (!siteConfig) return;
-    
-    // Get general config
-    config = await browser.runtime.sendMessage({ action: 'getConfig' });
-    
-    if (!config || !config.enabled) return;
-    
-    // Check if completely blocked
-    if (siteConfig.blocked) {
-      showOverlay('blocked');
-      return;
-    }
-    
-    // Check for active pass
-    const hasPass = await browser.runtime.sendMessage({ 
-      action: 'getPass', 
-      domain: siteConfig.domain 
-    });
-    
-    if (hasPass) return;
-    
-    // Check ration mode
-    if (siteConfig.ration) {
-      const usage = await browser.runtime.sendMessage({ 
-        action: 'getRationUsage', 
-        domain: siteConfig.domain 
-      });
-      
-      if (usage && usage.isExhausted) {
-        showOverlay('ration-expired');
-        return;
-      }
-      
-      // Has budget - don't block
-      return;
-    }
-    
-    // Standard pass mode - show choose
-    showOverlay('choose');
-    
-  } catch (e) {
-    console.error('[LOCKD] Error checking on load:', e);
-  }
-}
-
-// Don't auto-check on load - let background script handle it
-// This avoids double-blocking issues
-// checkOnLoad();
 
 } // End of guard block
