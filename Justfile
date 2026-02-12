@@ -70,8 +70,8 @@ watch target="firefox":
 
 # Bump version (usage: just bump 1.0.1)
 bump version:
-    sed -i '' 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.json
-    sed -i '' 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.chrome.json
+    sed -i 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.json
+    sed -i 's/"version": "[^"]*"/"version": "{{version}}"/' manifest.chrome.json
     @echo "Version bumped to {{version}}"
 
 # Show current version
