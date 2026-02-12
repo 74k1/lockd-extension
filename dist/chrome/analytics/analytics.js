@@ -48,16 +48,6 @@ function formatTime(seconds) {
   return `${minutes}m`;
 }
 
-function formatTimeShort(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  
-  if (hours > 0) {
-    return `${hours}h`;
-  }
-  return `${minutes}m`;
-}
-
 function getDateString(date) {
   return date.toISOString().split('T')[0];
 }
@@ -424,7 +414,7 @@ function renderTrend() {
     bar.className = 'trend-bar';
     
     const tooltipData = {
-      date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      date: new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       items: []
     };
     
@@ -471,7 +461,7 @@ function renderTrend() {
     if (showLabel) {
       const dateLabel = document.createElement('div');
       dateLabel.className = 'trend-date';
-      dateLabel.textContent = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      dateLabel.textContent = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       container.appendChild(dateLabel);
     }
     

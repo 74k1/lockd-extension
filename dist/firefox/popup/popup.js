@@ -136,9 +136,8 @@ async function loadPasses() {
       svg.appendChild(line2);
       revokeBtn.appendChild(svg);
       
-      const domainToRevoke = domain;
       revokeBtn.addEventListener('click', async () => {
-        await browser.runtime.sendMessage({ action: 'revokePass', domain: domainToRevoke });
+        await browser.runtime.sendMessage({ action: 'revokePass', domain });
         loadPasses();
       });
       

@@ -46,40 +46,6 @@ function createCheckIcon() {
   return svg;
 }
 
-function createXIcon() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 14 14');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'square');
-  
-  const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  line1.setAttribute('x1', '3');
-  line1.setAttribute('y1', '3');
-  line1.setAttribute('x2', '11');
-  line1.setAttribute('y2', '11');
-  
-  const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  line2.setAttribute('x1', '11');
-  line2.setAttribute('y1', '3');
-  line2.setAttribute('x2', '3');
-  line2.setAttribute('y2', '11');
-  
-  svg.appendChild(line1);
-  svg.appendChild(line2);
-  return svg;
-}
-
-function getMatchDisplayName(match) {
-  switch (match) {
-    case 'base': return 'Base Domain';
-    case 'exact': return 'Exact';
-    case 'regex': return 'Regex';
-    default: return 'Base Domain';
-  }
-}
-
 async function init() {
   config = await browser.runtime.sendMessage({ action: 'getConfig' });
   originalConfig = JSON.parse(JSON.stringify(config));
@@ -403,7 +369,7 @@ function renderSites() {
   });
 }
 
-function createCheckboxGroup(label, checked, index, field, isBlocked = false) {
+function createCheckboxGroup(label, checked, index, field) {
   const group = document.createElement('div');
   group.className = 'checkbox-group';
   
@@ -411,7 +377,6 @@ function createCheckboxGroup(label, checked, index, field, isBlocked = false) {
   checkbox.className = 'checkbox';
   if (checked) {
     checkbox.classList.add('checked');
-    if (isBlocked) checkbox.classList.add('blocked');
   }
   checkbox.appendChild(createCheckIcon());
   

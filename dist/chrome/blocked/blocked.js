@@ -10,7 +10,7 @@ const passDuration = params.get('passDuration');
 let siteConfig = null;
 let config = null;
 let originalHostname = '';
-let currentFeeling = null;
+let waitingCountdownInterval = null; // Countdown interval for private waiting screen
 
 // DOM Elements
 const domainEl = document.getElementById('domain');
@@ -231,7 +231,7 @@ function setupFeelingsScreen() {
 
 // Work button - instant access
 btnWork.addEventListener('click', async () => {
-  if (!siteConfig || !siteConfig.work) return;
+  if (!config || !siteConfig || !siteConfig.work) return;
   
   const duration = config.workDuration || 60;
   await grantAccessAndRedirect('work', duration);
@@ -239,32 +239,41 @@ btnWork.addEventListener('click', async () => {
 
 // Private button - start waiting countdown
 btnPrivate.addEventListener('click', () => {
-  if (!siteConfig || !siteConfig.private) return;
+  if (!config || !siteConfig || !siteConfig.private) return;
   
   startWaitingCountdown();
 });
 
 function startWaitingCountdown() {
+  // Clear any existing countdown
+  if (waitingCountdownInterval) {
+    clearInterval(waitingCountdownInterval);
+    waitingCountdownInterval = null;
+  }
+  
   showScreen('waiting');
   
   let seconds = config.privateDelay || 15;
   waitingTimer.textContent = seconds;
   
-  const interval = setInterval(() => {
+  waitingCountdownInterval = setInterval(() => {
     seconds--;
     waitingTimer.textContent = seconds;
     
     if (seconds <= 0) {
-      clearInterval(interval);
+      clearInterval(waitingCountdownInterval);
+      waitingCountdownInterval = null;
       showScreen('duration');
     }
   }, 1000);
 }
 
 // Duration slider
-durationSlider.addEventListener('input', () => {
-  durationValue.textContent = durationSlider.value;
-});
+if (durationSlider) {
+  durationSlider.addEventListener('input', () => {
+    durationValue.textContent = durationSlider.value;
+  });
+}
 
 // Confirm duration button
 btnConfirm.addEventListener('click', async () => {
@@ -297,6 +306,10 @@ async function grantAccessAndRedirect(type, duration) {
 
 // Back button
 btnBack.addEventListener('click', () => {
+  if (waitingCountdownInterval) {
+    clearInterval(waitingCountdownInterval);
+    waitingCountdownInterval = null;
+  }
   window.history.back();
 });
 
@@ -364,7 +377,6 @@ if (btnAddTime) {
 document.querySelectorAll('.feeling-btn').forEach(btn => {
   btn.addEventListener('click', async () => {
     const feeling = btn.dataset.feeling;
-    currentFeeling = feeling;
     
     // Log the feeling
     try {
