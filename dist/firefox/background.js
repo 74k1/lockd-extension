@@ -64,7 +64,7 @@ function normalizeDomain(hostname) {
 
 let activePasses = {};
 let rationUsage = {};      // { [domain]: { date: 'YYYY-MM-DD', usedSeconds: number } }
-let rationOvertime = {};   // { [domain]: { grantedMinutes: number } }
+let rationOvertime = {};   // { [domain]: { grantedMinutes: number, date: string } }
 let feelingsLog = [];      // [{ domain, feeling, timestamp, durationMinutes }]
 let analyticsHistory = {}; // { [date]: { [domain]: { hours: {}, paths: {}, totalSeconds, overtimeSeconds, feelings: [], blocks } } }
 let isInitialized = false;
@@ -129,6 +129,7 @@ async function ensureInitialized() {
     
     cleanExpiredPasses();
     cleanExpiredRationUsage();
+    cleanExpiredOvertime();
     setupMidnightReset();
     startRationTracking();
     
@@ -369,6 +370,24 @@ function cleanExpiredRationUsage() {
   }
 }
 
+// Clean up overtime entries from previous days
+function cleanExpiredOvertime() {
+  const today = getTodayString();
+  let changed = false;
+  
+  for (const domain in rationOvertime) {
+    if (rationOvertime[domain].date !== today) {
+      delete rationOvertime[domain];
+      changed = true;
+    }
+  }
+  
+  if (changed) {
+    browser.storage.local.set({ rationOvertime });
+    console.log('[LOCKD] Cleared stale overtime entries for new day');
+  }
+}
+
 // Setup midnight reset alarm
 function setupMidnightReset() {
   // Calculate ms until next midnight
@@ -394,9 +413,9 @@ function getRationStatus(domain, site) {
   const usedSeconds = (usage && usage.date === today) ? usage.usedSeconds : 0;
   const budgetSeconds = (site.rationMinutes || 5) * 60;
   
-  // Get overtime granted today
+  // Get overtime granted today (ignore stale entries from previous days)
   const overtime = rationOvertime[domain];
-  const overtimeSeconds = overtime ? overtime.grantedMinutes * 60 : 0;
+  const overtimeSeconds = (overtime && overtime.date === getTodayString()) ? overtime.grantedMinutes * 60 : 0;
   const totalBudgetSeconds = budgetSeconds + overtimeSeconds;
   
   return {
@@ -871,7 +890,8 @@ async function grantOvertime(domain, minutes) {
   console.log(`[LOCKD] Overtime added: ${domain} +${minutes}m (total budget now: base + ${totalGrantedMinutes}m overtime)`);
   
   rationOvertime[domain] = {
-    grantedMinutes: totalGrantedMinutes
+    grantedMinutes: totalGrantedMinutes,
+    date: getTodayString()
   };
   
   // Clear the exhausted flag so user can continue using their budget
@@ -887,6 +907,11 @@ async function grantOvertime(domain, minutes) {
 function getOvertimeStatus(domain) {
   const overtime = rationOvertime[domain];
   if (!overtime || !overtime.grantedMinutes) {
+    return null;
+  }
+  
+  // Ignore stale entries from previous days
+  if (overtime.date !== getTodayString()) {
     return null;
   }
   
@@ -1350,6 +1375,7 @@ async function handleMessage(message, sender) {
     
     case 'getUsageStats':
       // Get aggregated stats for popup/options
+      cleanExpiredOvertime();
       const stats = {
         rationUsage: {},
         overtime: {},
